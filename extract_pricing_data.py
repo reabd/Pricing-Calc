@@ -166,12 +166,16 @@ PRESET_LABELS = {
 # Manual corrections to what the raw VBA macros default to, confirmed by
 # the studio as out of date. Keyed by macro name -> {slot_key: item_name}.
 # The macros themselves still say "Float Dibond/Kapa 3/6 simple"; the
-# studio's actual default float profile is "3/4.5".
+# studio's actual default float profile is "3/4.5". Likewise the macros
+# say "Double Sided tape" for drawing; the studio's actual default is
+# "Hinjes with japanies paper" (Hinges with Japanese paper).
 PRESET_COMPONENT_OVERRIDES = {
     "Float": {"row23_profile_preset": "Float Dibond/Kapa 3/4.5 simple"},
     "Float_Chromalux": {"row23_profile_preset": "Float Dibond/Kapa 3/4.5 simple"},
     "Facemount_Float": {"row23_profile_preset": "Float Dibond/Kapa 3/4.5 simple"},
     "Kapa_Float": {"row23_profile_preset": "Float Dibond/Kapa 3/4.5 simple"},
+    "Box_Drawing": {"row28_drawing": "Hinjes with japanies paper"},
+    "Aluminium_Drawing": {"row28_drawing": "Hinjes with japanies paper"},
 }
 
 
