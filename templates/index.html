@@ -514,11 +514,30 @@ function selectPreset(p) {
 
 let currentJob = null; // {height_cm, width_cm, order_quantity} for the active Quick Quote result
 
+// row23_profile_preset mixes every frame family (Box, Aluminium, Canvas,
+// Float, Ready Wood) into one 80-item list. When editing it inline, only
+// offer the items from the same family as what's already selected —
+// picking a Box profile for a Float frame makes no sense. Checked in
+// order from most to least specific so e.g. "Box Ready Wood ..." doesn't
+// get swallowed by the plain "Box " prefix.
+const PROFILE_FAMILY_PREFIXES = ['Box Ready Wood', 'Float Ready Wood', 'Float Dibond/Kapa', 'Box', 'Canvas', 'Alumineum'];
+
+function profileFamily(itemName) {
+  return PROFILE_FAMILY_PREFIXES.find(prefix => itemName.startsWith(prefix)) || itemName;
+}
+
+function itemsForLine(slotKey, currentItem) {
+  const items = slotItems[slotKey];
+  if (slotKey !== 'row23_profile_preset' || !items) return items;
+  const family = profileFamily(currentItem);
+  return items.filter(name => profileFamily(name) === family);
+}
+
 function renderQuickQuoteResult(q) {
   const resultEl = document.getElementById('calc-result');
   let html = '<div class="result">';
   for (const l of q.lines) {
-    const items = slotItems[l.slot_key];
+    const items = itemsForLine(l.slot_key, l.item_name);
     const nameCell = items && items.length > 1
       ? `<select class="line-edit" data-slot="${l.slot_key}">` +
           items.map(name => `<option value="${name}"${name === l.item_name ? ' selected' : ''}>${name}</option>`).join('') +
