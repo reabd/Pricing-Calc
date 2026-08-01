@@ -43,9 +43,18 @@ _bundled_data_path = Path(__file__).resolve().parent / "pricing_data.json"
 _data_path = Path(os.environ.get("PRICING_DATA_PATH", _bundled_data_path))
 if not _data_path.exists() and _bundled_data_path.exists() and _data_path != _bundled_data_path:
     # First boot against a fresh persistent disk: seed it from the
-    # baseline that was extracted from the Excel workbook.
+    # baseline that was extracted from the Excel workbook. If this ever
+    # fires again on a deploy where prices were already customized, it
+    # means the persistent disk didn't actually persist (was recreated,
+    # unmounted, etc.) — logged loudly here so that's visible in the
+    # deploy logs instead of silently reverting prices with no trace.
+    print(f"[pricing_data] {_data_path} not found — seeding from bundled baseline "
+          f"{_bundled_data_path}. If price customizations were expected to already "
+          f"be here, the persistent disk did not actually persist.", flush=True)
     _data_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(_bundled_data_path, _data_path)
+else:
+    print(f"[pricing_data] using existing file at {_data_path} (not re-seeding).", flush=True)
 
 catalog = PricingCatalog(_data_path)
 
