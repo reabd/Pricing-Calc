@@ -79,6 +79,15 @@ def slugify(text):
 
 
 def load_okapics_catalog(wb_values):
+    """
+    A handful of item names appear more than once in the sheet under
+    different categories (e.g. 'Double Sided tape' exists under both
+    'Drawing Methods' and 'Glueing', with different costs). The
+    Calculator's actual formula does `MATCH($F, Okapics!C:C, 0)`, which
+    returns the FIRST matching row — so on a duplicate name, we must keep
+    the first occurrence too, not the last, to stay faithful to what
+    Excel actually computes.
+    """
     ws = wb_values["Okapics"]
     items = {}
     for r in range(3, ws.max_row + 1):
@@ -86,6 +95,8 @@ def load_okapics_catalog(wb_values):
         if not item:
             continue
         key = item.strip() if isinstance(item, str) else item
+        if key in items:
+            continue
         items[key] = {
             "product": ws.cell(row=r, column=OK_PRODUCT).value,
             "category": ws.cell(row=r, column=OK_CATEGORY).value,

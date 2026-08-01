@@ -2310,6 +2310,19 @@
           "effort_risk": 0.45,
           "effort_profit": 0.3
         },
+        "Double Sided tape": {
+          "fixed_material_cost": 5,
+          "var_material_cost": 55,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "var_effort_cost": 30,
+          "fixed_effort_cost": 12,
+          "min_effort_cost": 18,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
         "Sikot": {
           "fixed_material_cost": 5,
           "var_material_cost": 55,
@@ -2943,7 +2956,7 @@
       "components": [
         {
           "slot_key": "row28_drawing",
-          "item_name": "Hinjes with japanies paper"
+          "item_name": "Double Sided tape"
         },
         {
           "slot_key": "row12_lamelo",
@@ -2967,7 +2980,7 @@
         },
         {
           "slot_key": "row28_drawing",
-          "item_name": "Hinjes with japanies paper"
+          "item_name": "Double Sided tape"
         },
         {
           "slot_key": "row32_simple_wrap",
@@ -3223,7 +3236,7 @@
       "components": [
         {
           "slot_key": "row28_drawing",
-          "item_name": "Hinjes with japanies paper"
+          "item_name": "Double Sided tape"
         },
         {
           "slot_key": "row23_profile_preset",
