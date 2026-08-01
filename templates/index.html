@@ -4,94 +4,270 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Studio Pricing Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f7f7f8; --panel: #ffffff; --text: #1a1a1a; --muted: #666;
-    --border: #e0e0e0; --accent: #2f6f4f; --accent-dark: #244; --danger: #b3261e;
+    --paper: #f3f0e9;
+    --surface: #fcfbf8;
+    --ink: #201e1a;
+    --ink-muted: #6e6a5f;
+    --accent: #35505c;
+    --accent-ink: #f3f0e9;
+    --line: #e2ddd0;
+    --danger: #a8402c;
+    --warn-bg: #efe6cf;
+    --warn-line: #cbb267;
+    --radius: 3px;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#15171a; --panel:#1e2124; --text:#eee; --muted:#9aa0a6; --border:#33383d; --accent:#5fbf8f; --accent-dark:#8fe0b8; --danger:#ff6b60; }
+    :root {
+      --paper: #18191a; --surface: #212325; --ink: #ede9e0; --ink-muted: #9c978a;
+      --accent: #86aebc; --accent-ink: #14181a; --line: #34373a;
+      --danger: #d97a63; --warn-bg: #332d1c; --warn-line: #6b5c30;
+    }
   }
+  :root[data-theme="dark"] {
+    --paper: #18191a; --surface: #212325; --ink: #ede9e0; --ink-muted: #9c978a;
+    --accent: #86aebc; --accent-ink: #14181a; --line: #34373a;
+    --danger: #d97a63; --warn-bg: #332d1c; --warn-line: #6b5c30;
+  }
+  :root[data-theme="light"] {
+    --paper: #f3f0e9; --surface: #fcfbf8; --ink: #201e1a; --ink-muted: #6e6a5f;
+    --accent: #35505c; --accent-ink: #f3f0e9; --line: #e2ddd0;
+    --danger: #a8402c; --warn-bg: #efe6cf; --warn-line: #cbb267;
+  }
+
   * { box-sizing: border-box; }
-  body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-         background: var(--bg); color: var(--text); }
-  header { padding: 20px 24px; border-bottom: 1px solid var(--border); }
-  header h1 { margin: 0 0 4px; font-size: 1.4rem; }
-  header p { margin: 0; color: var(--muted); font-size: 0.9rem; }
-  .container { max-width: 900px; margin: 0 auto; padding: 24px; }
-  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
-  .tab-btn { padding: 10px 18px; border: none; background: none; cursor: pointer;
-             color: var(--muted); font-size: 0.95rem; border-bottom: 2px solid transparent; }
-  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; display: none; }
-  .panel.active { display: block; }
-  textarea { width: 100%; min-height: 90px; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
-             background: var(--bg); color: var(--text); font-size: 0.95rem; resize: vertical; }
-  button.primary { margin-top: 10px; padding: 9px 18px; border: none; border-radius: 8px;
-                   background: var(--accent); color: #fff; font-size: 0.95rem; cursor: pointer; }
-  button.primary:hover { background: var(--accent-dark); }
-  button.secondary { margin-top: 10px; margin-inline-start: 8px; padding: 9px 18px; border-radius: 8px;
-                     border: 1px solid var(--border); background: none; color: var(--text); cursor: pointer; }
-  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.9rem; }
-  th, td { text-align: start; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 600; }
-  .quote-block { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 14px; }
-  .quote-block h3 { margin: 0 0 6px; font-size: 1rem; }
-  .total-row { font-weight: 700; font-size: 1.1rem; margin-top: 16px; text-align: end; }
-  .clarify { background: rgba(255,196,0,0.12); border: 1px solid #e0b300; border-radius: 8px; padding: 10px 14px; margin-top: 14px; }
-  .error { color: var(--danger); margin-top: 10px; }
-  .muted { color: var(--muted); font-size: 0.85rem; }
-  .excluded { margin-top: 24px; font-size: 0.82rem; color: var(--muted); }
-  .excluded ul { margin: 6px 0 0; padding-inline-start: 20px; }
-  .slot-header { cursor: pointer; padding: 8px 0; font-weight: 600; }
-  details { border-bottom: 1px solid var(--border); padding: 6px 0; }
-  .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--muted);
-             border-top-color: var(--accent); border-radius:50%; animation: spin 0.8s linear infinite; margin-inline-end:6px; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+
+  html, body { margin: 0; background: var(--paper); color: var(--ink); }
+  body {
+    font-family: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    line-height: 1.5;
+  }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+
+  a { color: inherit; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .shell { max-width: 880px; margin: 0 auto; padding: 48px 28px 80px; }
+
+  header.site { margin-bottom: 44px; }
+  header.site h1 {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-weight: 400;
+    font-size: 2.3rem;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  header.site p { margin: 0; color: var(--ink-muted); font-size: 0.95rem; }
+
+  .eyebrow {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--ink-muted); font-weight: 600; margin: 0 0 10px;
+  }
+
+  section.quick-quote { margin-bottom: 56px; }
+  section.quick-quote > h2 {
+    font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400;
+    font-size: 1.5rem; margin: 0 0 4px;
+  }
+  section.quick-quote > p.lede { margin: 0 0 24px; color: var(--ink-muted); max-width: 60ch; }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  button.preset-card {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; cursor: pointer; text-align: start; color: var(--ink);
+    transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+    font-family: inherit;
+  }
+  button.preset-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  button.preset-card svg { width: 34px; height: 34px; color: var(--ink-muted); flex-shrink: 0; }
+  button.preset-card:hover svg, button.preset-card.selected svg { color: var(--accent); }
+  button.preset-card.selected {
+    border-color: var(--accent); border-width: 1.5px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  }
+  button.preset-card .name { font-size: 0.92rem; font-weight: 500; }
+
+  .measure-panel {
+    margin-top: 22px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--surface); padding: 24px; display: none;
+  }
+  .measure-panel.open { display: block; }
+  .measure-panel .selected-name {
+    font-family: "Instrument Serif", Georgia, serif; font-size: 1.2rem; margin: 0 0 18px;
+  }
+  .measure-row { display: flex; flex-wrap: wrap; align-items: end; gap: 18px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-muted); font-weight: 600;
+  }
+  .field input {
+    font-family: "IBM Plex Mono", monospace; font-size: 1.05rem; font-variant-numeric: tabular-nums;
+    width: 108px; padding: 9px 10px; border-radius: var(--radius); border: 1px solid var(--line);
+    background: var(--paper); color: var(--ink);
+  }
+  .field input:focus { border-color: var(--accent); }
+  .size-x { color: var(--ink-muted); font-family: "IBM Plex Mono", monospace; padding-bottom: 11px; }
+
+  button.action {
+    font-family: inherit; font-size: 0.92rem; font-weight: 500; cursor: pointer;
+    padding: 10px 22px; border-radius: var(--radius); border: 1px solid var(--accent);
+    background: var(--accent); color: var(--accent-ink);
+    transition: opacity 0.15s ease;
+  }
+  button.action:hover { opacity: 0.85; }
+  button.action.ghost { background: none; color: var(--ink); border-color: var(--line); }
+  button.action.ghost:hover { border-color: var(--ink-muted); opacity: 1; }
+
+  .result { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 18px; }
+  .spec-line {
+    display: flex; justify-content: space-between; gap: 12px; padding: 7px 0;
+    border-bottom: 1px solid var(--line); font-size: 0.88rem;
+  }
+  .spec-line .label { color: var(--ink); }
+  .spec-line .item { color: var(--ink-muted); }
+  .spec-line .amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .result .meta { color: var(--ink-muted); font-size: 0.82rem; margin-top: 10px; }
+  .grand-total {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-top: 18px; padding-top: 14px; border-top: 1.5px solid var(--ink);
+  }
+  .grand-total .label { font-size: 0.85rem; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .grand-total .amount {
+    font-family: "IBM Plex Mono", monospace; font-size: 2rem; font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- secondary tools --- */
+  section.tools { border-top: 1px solid var(--line); padding-top: 32px; }
+  .tab-strip { display: flex; gap: 22px; margin-bottom: 20px; }
+  .tab-btn {
+    font-family: inherit; background: none; border: none; cursor: pointer; padding: 0 0 8px;
+    color: var(--ink-muted); font-size: 0.88rem; border-bottom: 2px solid transparent;
+  }
+  .tab-btn.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .tool-panel { display: none; }
+  .tool-panel.active { display: block; }
+
+  textarea {
+    width: 100%; min-height: 76px; padding: 12px; border-radius: var(--radius); border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); font-size: 0.92rem; font-family: inherit; resize: vertical;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.85rem; }
+  th, td { text-align: start; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  td.num, th.num { font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; }
+
+  .clarify { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--radius); padding: 12px 14px; margin-top: 14px; font-size: 0.9rem; }
+  .error { color: var(--danger); margin-top: 10px; font-size: 0.9rem; }
+  .muted { color: var(--ink-muted); font-size: 0.85rem; }
+
+  details { border-bottom: 1px solid var(--line); padding: 10px 0; }
+  summary { cursor: pointer; font-weight: 500; font-size: 0.92rem; }
+  summary::marker { color: var(--ink-muted); }
+
+  footer.excluded { margin-top: 40px; font-size: 0.8rem; color: var(--ink-muted); }
+  footer.excluded ul { margin: 8px 0 0; padding-inline-start: 20px; }
+
+  .spinner {
+    display: inline-block; width: 13px; height: 13px; border: 2px solid var(--line);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-inline-end: 7px;
+  }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
-<header>
-  <h1>Studio Pricing Calculator</h1>
-  <p>Prices sourced from the studio's Excel pricing model.</p>
-</header>
-<div class="container">
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="quote">Get a Quote</button>
-    <button class="tab-btn" data-tab="update">Update Prices</button>
-    <button class="tab-btn" data-tab="pricelist">Price List</button>
-  </div>
+<div class="shell">
 
-  <div class="panel active" id="panel-quote">
-    <p class="muted">Describe one or more products and their sizes, in free text (Hebrew or English). You can name a package (Box Frame, Float Frame, Aluminium Frame, Canvas, Facemount...) and just override what's different. Example: "2 units 50x70 box frame with museum glass".</p>
-    <textarea id="quote-text" placeholder="Type your request here..."></textarea>
-    <br>
-    <button class="primary" id="quote-submit">Get Quote</button>
-    <div id="quote-status"></div>
-    <div id="quote-results"></div>
-  </div>
+  <header class="site">
+    <h1>Studio Pricing Calculator</h1>
+    <p>Prices sourced from the studio's Excel pricing model.</p>
+  </header>
 
-  <div class="panel" id="panel-update">
-    <p class="muted">Describe a price change in free text. Example: "raise print paper prices by 20%".</p>
-    <textarea id="update-text" placeholder="Type your price update here..."></textarea>
-    <br>
-    <button class="primary" id="update-preview">Preview Change</button>
-    <div id="update-status"></div>
-    <div id="update-diffs"></div>
-  </div>
+  <section class="quick-quote">
+    <p class="eyebrow">Quick quote</p>
+    <h2>Pick a frame, enter a size</h2>
+    <p class="lede">Choose the profile you're building — each one carries its studio defaults (joins, wrap, backing) — then give it a size for an instant price.</p>
 
-  <div class="panel" id="panel-pricelist">
-    <p class="muted">Current imported price catalog (read-only view).</p>
-    <h3>Packages (presets)</h3>
-    <div id="presets-content">Loading…</div>
-    <h3 style="margin-top:20px;">Components</h3>
-    <div id="pricelist-content">Loading…</div>
-  </div>
+    <div class="card-grid" id="preset-grid"></div>
 
-  <div class="excluded">
+    <div class="measure-panel" id="measure-panel">
+      <p class="selected-name" id="measure-name"></p>
+      <div class="measure-row">
+        <div class="field">
+          <label for="in-height">Height (cm)</label>
+          <input type="number" id="in-height" min="1" step="0.5" placeholder="0">
+        </div>
+        <span class="size-x">×</span>
+        <div class="field">
+          <label for="in-width">Width (cm)</label>
+          <input type="number" id="in-width" min="1" step="0.5" placeholder="0">
+        </div>
+        <div class="field">
+          <label for="in-qty">Quantity</label>
+          <input type="number" id="in-qty" min="1" step="1" value="1">
+        </div>
+        <button class="action" id="calc-btn">Calculate</button>
+      </div>
+      <div id="calc-status"></div>
+      <div id="calc-result"></div>
+    </div>
+  </section>
+
+  <section class="tools">
+    <p class="eyebrow">More ways to ask</p>
+    <div class="tab-strip">
+      <button class="tab-btn active" data-tab="freetext">Describe it in your own words</button>
+      <button class="tab-btn" data-tab="update">Update prices</button>
+      <button class="tab-btn" data-tab="pricelist">Price list</button>
+    </div>
+
+    <div class="tool-panel active" id="panel-freetext">
+      <p class="muted">Free text, Hebrew or English — several products at once, wood species, paint finishes, whatever doesn't fit a quick-quote card. Example: "2 units 50x70 box frame in cherry wood".</p>
+      <textarea id="quote-text" placeholder="Type your request here..."></textarea>
+      <div style="margin-top:10px;"><button class="action" id="quote-submit">Get Quote</button></div>
+      <div id="quote-status"></div>
+      <div id="quote-results"></div>
+    </div>
+
+    <div class="tool-panel" id="panel-update">
+      <p class="muted">Describe a price change in free text. Example: "raise print paper prices by 20%".</p>
+      <textarea id="update-text" placeholder="Type your price update here..."></textarea>
+      <div style="margin-top:10px;"><button class="action" id="update-preview">Preview Change</button></div>
+      <div id="update-status"></div>
+      <div id="update-diffs"></div>
+    </div>
+
+    <div class="tool-panel" id="panel-pricelist">
+      <p class="muted">Current imported price catalog (read-only view).</p>
+      <h3 style="font-family:'Instrument Serif', serif; font-weight:400; font-size:1.1rem;">Packages</h3>
+      <div id="presets-content">Loading…</div>
+      <h3 style="font-family:'Instrument Serif', serif; font-weight:400; font-size:1.1rem; margin-top:22px;">Components</h3>
+      <div id="pricelist-content">Loading…</div>
+    </div>
+  </section>
+
+  <footer class="excluded">
     <strong>Not yet supported in this phase:</strong>
     <ul id="excluded-list"></ul>
-  </div>
+  </footer>
 </div>
 
 <script>
@@ -99,19 +275,6 @@ const EXCLUDED = {{ excluded_features | tojson }};
 document.getElementById('excluded-list').innerHTML =
   EXCLUDED.map(x => `<li>${x}</li>`).join('');
 
-// --- Tabs ---
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'pricelist' && !window.__pricelistLoaded) loadPriceList();
-  });
-});
-
-// Display-only rounding to the nearest whole shekel (the underlying data
-// stays precise; only what's shown here is rounded).
 function fmt(n) { return new Intl.NumberFormat('en-US', {maximumFractionDigits:0}).format(Math.round(n)); }
 
 let slotLabels = {};
@@ -121,7 +284,97 @@ let slotLabels = {};
   slotLabels = Object.fromEntries(slots.map(s => [s.key, s.label]));
 })();
 
-// --- Quote tab ---
+/* ---------------- Quick quote ---------------- */
+
+const ICONS = {
+  box: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor"><rect x="6" y="6" width="36" height="36" stroke-width="7"/></svg>',
+  float: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor"><rect x="5" y="5" width="38" height="38" stroke-width="2"/><rect x="16" y="16" width="16" height="16" stroke-width="2"/></svg>',
+  aluminium: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16 V6 H16"/><path d="M32 6 H42 V16"/><path d="M42 32 V42 H32"/><path d="M16 42 H6 V32"/></svg>',
+  canvas: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="8" width="32" height="32"/><path d="M8 8 L14 14"/><path d="M40 8 L34 14"/><path d="M8 40 L14 34"/><path d="M40 40 L34 34"/></svg>',
+  facemount: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="36"/><line x1="12" y1="34" x2="34" y2="12"/></svg>',
+  chromalux: '<svg viewBox="0 0 48 48" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="36" fill="none"/><line x1="12" y1="34" x2="34" y2="12"/><circle cx="30" cy="30" r="1.4" fill="currentColor" stroke="none"/><circle cx="17" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg>',
+  print_on_dbond: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="34"/><line x1="6" y1="42" x2="42" y2="42"/></svg>',
+};
+
+const QUICK_PRESETS = [
+  {key: 'box', label: 'Box Frame'},
+  {key: 'float', label: 'Float Frame'},
+  {key: 'aluminium', label: 'Aluminium Frame'},
+  {key: 'canvas', label: 'Canvas Stretch'},
+  {key: 'facemount', label: 'Facemount'},
+  {key: 'chromalux', label: 'Chromalux'},
+  {key: 'print_on_dbond', label: 'Print on Dibond'},
+];
+
+let selectedPreset = null;
+
+const grid = document.getElementById('preset-grid');
+QUICK_PRESETS.forEach(p => {
+  const btn = document.createElement('button');
+  btn.className = 'preset-card';
+  btn.type = 'button';
+  btn.dataset.key = p.key;
+  btn.innerHTML = `${ICONS[p.key] || ''}<span class="name">${p.label}</span>`;
+  btn.addEventListener('click', () => selectPreset(p.key, p.label));
+  grid.appendChild(btn);
+});
+
+function selectPreset(key, label) {
+  selectedPreset = key;
+  document.querySelectorAll('.preset-card').forEach(b => b.classList.toggle('selected', b.dataset.key === key));
+  document.getElementById('measure-name').textContent = label;
+  document.getElementById('measure-panel').classList.add('open');
+  document.getElementById('calc-result').innerHTML = '';
+  document.getElementById('calc-status').innerHTML = '';
+}
+
+document.getElementById('calc-btn').addEventListener('click', async () => {
+  const h = parseFloat(document.getElementById('in-height').value);
+  const w = parseFloat(document.getElementById('in-width').value);
+  const qty = parseFloat(document.getElementById('in-qty').value) || 1;
+  const statusEl = document.getElementById('calc-status');
+  const resultEl = document.getElementById('calc-result');
+  resultEl.innerHTML = '';
+  if (!selectedPreset) return;
+  if (!h || !w) { resultEl.innerHTML = '<div class="error">Enter a height and width first.</div>'; return; }
+
+  statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
+  try {
+    const res = await fetch('/api/quote/structured', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({lines: [{height_cm: h, width_cm: w, order_quantity: qty, preset_key: selectedPreset, components: []}]})
+    });
+    const data = await res.json();
+    statusEl.innerHTML = '';
+    if (data.error) { resultEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
+    const q = data.quotes[0];
+    let html = '<div class="result">';
+    for (const l of q.lines) {
+      html += `<div class="spec-line"><span class="label">${slotLabels[l.slot_key] || l.slot_key} <span class="item">— ${l.item_name}</span></span><span class="amount">${fmt(l.line_total)}</span></div>`;
+    }
+    html += `<p class="meta">Quantity ${q.order_quantity} · Margin ${(q.margin*100).toFixed(1)}%</p>`;
+    html += `<div class="grand-total"><span class="label">Total incl. VAT</span><span class="amount">${fmt(q.final_price_incl_vat)}</span></div>`;
+    html += '</div>';
+    resultEl.innerHTML = html;
+  } catch (e) {
+    statusEl.innerHTML = '';
+    resultEl.innerHTML = `<div class="error">${e}</div>`;
+  }
+});
+
+/* ---------------- Secondary tabs ---------------- */
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tool-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'pricelist' && !window.__pricelistLoaded) loadPriceList();
+  });
+});
+
+/* ---------------- Free-text quote ---------------- */
 document.getElementById('quote-submit').addEventListener('click', async () => {
   const text = document.getElementById('quote-text').value.trim();
   const statusEl = document.getElementById('quote-status');
@@ -142,17 +395,17 @@ document.getElementById('quote-submit').addEventListener('click', async () => {
     }
     let html = '';
     for (const q of data.quotes) {
-      html += `<div class="quote-block"><h3>${q.description || (q.height_cm + '×' + q.width_cm + ' cm')}</h3>`;
-      html += `<table><thead><tr><th>Component</th><th>Item</th><th>Material</th><th>Work</th><th>Line total</th></tr></thead><tbody>`;
+      html += `<div class="result"><p class="selected-name" style="font-family:'Instrument Serif',serif; font-size:1.05rem;">${q.description || (q.height_cm + '×' + q.width_cm + ' cm')}</p>`;
       for (const l of q.lines) {
-        html += `<tr><td>${slotLabels[l.slot_key] || l.slot_key}</td><td>${l.item_name}</td><td>${fmt(l.material_price)}</td><td>${fmt(l.work_price)}</td><td>${fmt(l.line_total)}</td></tr>`;
+        html += `<div class="spec-line"><span class="label">${slotLabels[l.slot_key] || l.slot_key} <span class="item">— ${l.item_name}</span></span><span class="amount">${fmt(l.line_total)}</span></div>`;
       }
-      html += `</tbody></table>`;
-      html += `<p class="muted">Quantity: ${q.order_quantity} · Margin: ${(q.margin*100).toFixed(1)}%</p>`;
-      html += `<p class="total-row">Total incl. VAT: ${fmt(q.final_price_incl_vat)}</p>`;
+      html += `<p class="meta">Quantity ${q.order_quantity} · Margin ${(q.margin*100).toFixed(1)}%</p>`;
+      html += `<div class="grand-total"><span class="label">Total incl. VAT</span><span class="amount">${fmt(q.final_price_incl_vat)}</span></div>`;
       html += `</div>`;
     }
-    html += `<div class="total-row">Grand total incl. VAT: ${fmt(data.grand_total_incl_vat)}</div>`;
+    if (data.quotes.length > 1) {
+      html += `<div class="grand-total"><span class="label">Grand total incl. VAT</span><span class="amount">${fmt(data.grand_total_incl_vat)}</span></div>`;
+    }
     resultsEl.innerHTML = html;
   } catch (e) {
     statusEl.innerHTML = '';
@@ -160,7 +413,7 @@ document.getElementById('quote-submit').addEventListener('click', async () => {
   }
 });
 
-// --- Update prices tab ---
+/* ---------------- Update prices ---------------- */
 let pendingDiffs = null;
 
 document.getElementById('update-preview').addEventListener('click', async () => {
@@ -182,13 +435,13 @@ document.getElementById('update-preview').addEventListener('click', async () => 
       return;
     }
     pendingDiffs = data.diffs;
-    let html = `<table><thead><tr><th>Slot</th><th>Item</th><th>Field</th><th>Old</th><th>New</th></tr></thead><tbody>`;
+    let html = `<div class="table-wrap"><table><thead><tr><th>Slot</th><th>Item</th><th>Field</th><th class="num">Old</th><th class="num">New</th></tr></thead><tbody>`;
     for (const d of data.diffs) {
-      html += `<tr><td>${d.slot_key}</td><td>${d.item_name}</td><td>${d.field}</td><td>${fmt(d.old_value)}</td><td><strong>${fmt(d.new_value)}</strong></td></tr>`;
+      html += `<tr><td>${d.slot_key}</td><td>${d.item_name}</td><td>${d.field}</td><td class="num">${fmt(d.old_value)}</td><td class="num"><strong>${fmt(d.new_value)}</strong></td></tr>`;
     }
-    html += `</tbody></table>`;
-    html += `<button class="primary" id="update-confirm">Confirm &amp; Apply</button>`;
-    html += `<button class="secondary" id="update-cancel">Cancel</button>`;
+    html += `</tbody></table></div>`;
+    html += `<div style="margin-top:14px; display:flex; gap:10px;"><button class="action" id="update-confirm">Confirm &amp; Apply</button>`;
+    html += `<button class="action ghost" id="update-cancel">Cancel</button></div>`;
     diffsEl.innerHTML = html;
 
     document.getElementById('update-confirm').addEventListener('click', async () => {
@@ -210,7 +463,7 @@ document.getElementById('update-preview').addEventListener('click', async () => 
   }
 });
 
-// --- Price list tab ---
+/* ---------------- Price list ---------------- */
 async function loadPriceList() {
   const presetsEl = document.getElementById('presets-content');
   const el = document.getElementById('pricelist-content');
@@ -226,23 +479,23 @@ async function loadPriceList() {
 
   let presetsHtml = '';
   for (const preset of presets) {
-    presetsHtml += `<details><summary class="slot-header">${preset.label}</summary>`;
-    presetsHtml += `<table><thead><tr><th>Component</th><th>Default item</th></tr></thead><tbody>`;
+    presetsHtml += `<details><summary>${preset.label}</summary>`;
+    presetsHtml += `<div class="table-wrap"><table><thead><tr><th>Component</th><th>Default item</th></tr></thead><tbody>`;
     for (const c of preset.components) {
       presetsHtml += `<tr><td>${slotLabel[c.slot_key] || c.slot_key}</td><td>${c.item_name}</td></tr>`;
     }
-    presetsHtml += `</tbody></table></details>`;
+    presetsHtml += `</tbody></table></div></details>`;
   }
   presetsEl.innerHTML = presetsHtml;
 
   let html = '';
   for (const slot of slots) {
-    html += `<details><summary class="slot-header">${slot.label} (${slot.kind}, ${slot.size_mode}) — ${Object.keys(slot.items).length} item(s)</summary>`;
-    html += `<table><thead><tr><th>Item</th><th>Fixed cost</th><th>Var cost</th><th>Material profit %</th></tr></thead><tbody>`;
+    html += `<details><summary>${slot.label} <span class="muted">(${slot.kind}, ${slot.size_mode}) — ${Object.keys(slot.items).length} item(s)</span></summary>`;
+    html += `<div class="table-wrap"><table><thead><tr><th>Item</th><th class="num">Fixed cost</th><th class="num">Var cost</th><th class="num">Material profit %</th></tr></thead><tbody>`;
     for (const [name, item] of Object.entries(slot.items)) {
-      html += `<tr><td>${name}</td><td>${fmt(item.fixed_material_cost)}</td><td>${fmt(item.var_material_cost)}</td><td>${(item.material_profit*100).toFixed(0)}%</td></tr>`;
+      html += `<tr><td>${name}</td><td class="num">${fmt(item.fixed_material_cost)}</td><td class="num">${fmt(item.var_material_cost)}</td><td class="num">${(item.material_profit*100).toFixed(0)}%</td></tr>`;
     }
-    html += `</tbody></table></details>`;
+    html += `</tbody></table></div></details>`;
   }
   el.innerHTML = html;
   window.__pricelistLoaded = true;
