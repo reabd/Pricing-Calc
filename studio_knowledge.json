@@ -1,0 +1,35 @@
+{
+  "_comment": "Manually curated business knowledge that isn't derivable from the Excel workbook. Never touched by extract_pricing_data.py, so re-running the extraction won't erase this.",
+  "wood_species": {
+    "special_tier_species": ["Mahogany", "American Walnut", "African Walnut", "Maple", "Cherry"],
+    "simple_tier_species": ["Oak", "Pine", "Linden"],
+    "notes": "Every 'Preset Profile' item that comes in a 'simple'/'special' pair (Box, Canvas, and Float Dibond/Kapa families, e.g. 'Box 1.5/4 simple' / 'Box 1.5/4 special') is made from a specific wood species. Naming one of the special_tier_species means the 'special' variant of that size/family; naming one of the simple_tier_species means the 'simple' variant. Items without a simple/special pair (Alumineum profiles, 'Box Ready Wood ...', 'Float Ready Wood ...') are unaffected by this rule."
+  },
+  "paint_wood_constraints": {
+    "solid": {
+      "required_species": "Linden",
+      "required_tier": "simple",
+      "notes": "Every frame painted with the 'solid' method is made from Linden wood, i.e. must use the 'simple' Preset Profile variant."
+    },
+    "Sprayed": {
+      "required_species": "Maple",
+      "required_tier": "special",
+      "notes": "Every frame painted with the 'Sprayed' method is made from Maple wood, i.e. must use the 'special' Preset Profile variant."
+    }
+  },
+  "default_paint_when_unspecified": {
+    "default_item": "natural",
+    "notes": "Regardless of tier (simple or special), if the customer hasn't explicitly requested a specific paint method themselves, the frame defaults to 'natural' (bare wood grain — Oak for simple tier, the named species for special tier). This overrides whatever a preset's own baked-in default paint would otherwise be (e.g. the Box preset's raw default is 'solid', but that must not be applied unless the customer actually asked for 'solid'). 'solid' and 'Sprayed' are only used when the customer explicitly asks for them, since each forces a specific required wood species — see paint_wood_constraints."
+  },
+  "vocabulary_aliases": {
+    "lamination": {
+      "slot_key": "row29_front_material",
+      "default_item": "Photo Matt",
+      "notes": "When a customer asks for 'lamination' (or 'to laminate the print') with no further detail, add the row29_front_material component with item 'Photo Matt' (matte lamination) as the default. If they specify a different finish explicitly (e.g. 'glossy lamination' / 'satin lamination'), use 'Photo Satin' instead. Acrylic/Chromalux face-mounting is a different, more specific request and should only be used if the customer names it directly (acrylic, face-mount, chromalux), not just for generic 'lamination'."
+    }
+  },
+  "float_profile_size_aliases": {
+    "big": "3/6",
+    "notes": "For the row23_profile_preset slot, when the chosen item is a 'Float Dibond/Kapa' profile, the studio's default family is 3/4.5. If the customer describes wanting a 'big' / 'large' / 'wide' float profile, use the 3/6 family instead, keeping whatever simple/special tier otherwise applies. This only applies to Float Dibond/Kapa items, not Box or Canvas profiles."
+  }
+}

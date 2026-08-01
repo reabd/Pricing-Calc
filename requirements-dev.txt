@@ -1,0 +1,4 @@
+# Only needed to run extract_pricing_data.py locally against the source
+# Excel workbook — not needed by the deployed app itself.
+openpyxl
+oletools
