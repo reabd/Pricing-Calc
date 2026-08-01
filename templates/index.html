@@ -170,6 +170,12 @@
   .spec-line .label { color: var(--ink); }
   .spec-line .item { color: var(--ink-muted); }
   .spec-line .amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  select.line-edit {
+    font-family: inherit; font-size: 0.88rem; color: var(--ink-muted); cursor: pointer;
+    background: none; border: none; border-bottom: 1px dotted var(--ink-muted);
+    padding: 0 0 1px; appearance: none; -webkit-appearance: none;
+  }
+  select.line-edit:hover, select.line-edit:focus { color: var(--accent); border-bottom-color: var(--accent); outline: none; }
   .result .meta { color: var(--ink-muted); font-size: 0.82rem; margin-top: 10px; }
   .grand-total {
     display: flex; justify-content: space-between; align-items: baseline;
@@ -309,12 +315,14 @@ document.getElementById('excluded-list').innerHTML =
 function fmt(n) { return new Intl.NumberFormat('en-US', {maximumFractionDigits:0}).format(Math.round(n)); }
 
 let slotLabels = {};
+let slotItems = {};
 let presetComponents = {};
 (async () => {
   const [catalogRes, presetsRes] = await Promise.all([fetch('/api/catalog'), fetch('/api/presets')]);
   const slots = await catalogRes.json();
   const presets = await presetsRes.json();
   slotLabels = Object.fromEntries(slots.map(s => [s.key, s.label]));
+  slotItems = Object.fromEntries(slots.map(s => [s.key, s.items]));
   presetComponents = Object.fromEntries(presets.map(p => [
     p.key, Object.fromEntries(p.components.map(c => [c.slot_key, c.item_name]))
   ]));
@@ -474,6 +482,55 @@ function selectPreset(key, label) {
   }
 }
 
+let currentJob = null; // {height_cm, width_cm, order_quantity} for the active Quick Quote result
+
+function renderQuickQuoteResult(q) {
+  const resultEl = document.getElementById('calc-result');
+  let html = '<div class="result">';
+  for (const l of q.lines) {
+    const items = slotItems[l.slot_key];
+    const nameCell = items && items.length > 1
+      ? `<select class="line-edit" data-slot="${l.slot_key}">` +
+          items.map(name => `<option value="${name}"${name === l.item_name ? ' selected' : ''}>${name}</option>`).join('') +
+        `</select>`
+      : `<span class="item">${l.item_name}</span>`;
+    html += `<div class="spec-line"><span class="label">${slotLabels[l.slot_key] || l.slot_key} — ${nameCell}</span><span class="amount">${fmt(l.line_total)}</span></div>`;
+  }
+  html += `<p class="meta">Quantity ${q.order_quantity} · Margin ${(q.margin*100).toFixed(1)}%</p>`;
+  html += `<div class="grand-total"><span class="label">Total incl. VAT</span><span class="amount">${fmt(q.final_price_incl_vat)}</span></div>`;
+  html += '</div>';
+  resultEl.innerHTML = html;
+
+  resultEl.querySelectorAll('.line-edit').forEach(select => {
+    select.addEventListener('change', () => {
+      const components = q.lines.map(l => ({
+        slot_key: l.slot_key,
+        item_name: l.slot_key === select.dataset.slot ? select.value : l.item_name,
+      }));
+      recalcQuickQuote(components);
+    });
+  });
+}
+
+async function recalcQuickQuote(components) {
+  const statusEl = document.getElementById('calc-status');
+  const resultEl = document.getElementById('calc-result');
+  statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
+  try {
+    const res = await fetch('/api/quote/structured', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({lines: [{...currentJob, preset_key: null, components}]})
+    });
+    const data = await res.json();
+    statusEl.innerHTML = '';
+    if (data.error) { resultEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
+    renderQuickQuoteResult(data.quotes[0]);
+  } catch (e) {
+    statusEl.innerHTML = '';
+    resultEl.innerHTML = `<div class="error">${e}</div>`;
+  }
+}
+
 document.getElementById('calc-btn').addEventListener('click', async () => {
   const h = parseFloat(document.getElementById('in-height').value);
   const w = parseFloat(document.getElementById('in-width').value);
@@ -484,25 +541,18 @@ document.getElementById('calc-btn').addEventListener('click', async () => {
   if (!selectedPreset) return;
   if (!h || !w) { resultEl.innerHTML = '<div class="error">Enter a height and width first.</div>'; return; }
 
+  currentJob = {height_cm: h, width_cm: w, order_quantity: qty};
   statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
   const overrideComponents = Object.entries(customOverrides).map(([slot_key, item_name]) => ({slot_key, item_name}));
   try {
     const res = await fetch('/api/quote/structured', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({lines: [{height_cm: h, width_cm: w, order_quantity: qty, preset_key: selectedVariant, components: overrideComponents}]})
+      body: JSON.stringify({lines: [{...currentJob, preset_key: selectedVariant, components: overrideComponents}]})
     });
     const data = await res.json();
     statusEl.innerHTML = '';
     if (data.error) { resultEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
-    const q = data.quotes[0];
-    let html = '<div class="result">';
-    for (const l of q.lines) {
-      html += `<div class="spec-line"><span class="label">${slotLabels[l.slot_key] || l.slot_key} <span class="item">— ${l.item_name}</span></span><span class="amount">${fmt(l.line_total)}</span></div>`;
-    }
-    html += `<p class="meta">Quantity ${q.order_quantity} · Margin ${(q.margin*100).toFixed(1)}%</p>`;
-    html += `<div class="grand-total"><span class="label">Total incl. VAT</span><span class="amount">${fmt(q.final_price_incl_vat)}</span></div>`;
-    html += '</div>';
-    resultEl.innerHTML = html;
+    renderQuickQuoteResult(data.quotes[0]);
   } catch (e) {
     statusEl.innerHTML = '';
     resultEl.innerHTML = `<div class="error">${e}</div>`;
