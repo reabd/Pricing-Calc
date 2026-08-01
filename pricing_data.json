@@ -3208,7 +3208,7 @@
     {
       "key": "print_on_dbond",
       "macro_name": "Print_on_dbond",
-      "label": "Print on Dibond",
+      "label": "Print + Dibond",
       "components": [
         {
           "slot_key": "row11_paper",

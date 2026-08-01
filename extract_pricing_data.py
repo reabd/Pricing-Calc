@@ -156,7 +156,7 @@ PRESET_LABELS = {
     "Facemount": "Facemount",
     "Facemount_Float": "Float Frame + Print, Acrylic Facemount",
     "Kapa_Float": "Float Frame + Print (default — Kapa back)",
-    "Print_on_dbond": "Print on Dibond",
+    "Print_on_dbond": "Print + Dibond",
     "Aluminium_Drawing": "Aluminium Frame + Drawing",
     "Aluminium_Print": "Aluminium Frame + Print",
     "Aluminium": "Aluminium Frame",
