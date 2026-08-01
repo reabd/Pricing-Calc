@@ -37,5 +37,11 @@
       "trigger_terms": ["work on paper", "paper artwork", "drawing", "original on paper", "watercolor", "watercolour"],
       "notes": "When a customer wants a box frame for an existing 'work on paper' (a drawing, watercolor, or similar paper-based original — not a new print job), use the 'box_drawing' preset (labeled '+ Drawing' in the UI), not the base 'box' preset. It uses a paper-safe hinging method instead of a Kapaline-backed print mount, which is what a work on paper actually needs."
     }
+  },
+  "box_back_frame_rule": {
+    "slot_key": "row14_back_frame_small",
+    "default_item": "Back Frame Small",
+    "perimeter_threshold_m": 5,
+    "notes": "Any Box-family profile (row23_profile_preset starting with 'Box ', excluding 'Box Ready Wood ...') needs a small back-frame brace for structural support once the frame's perimeter — (height_cm+width_cm)*2/100 — exceeds 5 meters. Add row14_back_frame_small ('Back Frame Small') automatically in that case, unless the caller already specified that slot themselves. Always on — not gated behind free-text-only interpretation, since it's a structural fact, not a language ambiguity."
   }
 }

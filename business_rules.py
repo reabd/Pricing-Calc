@@ -109,3 +109,30 @@ def apply_wood_paint_rules(catalog, components, wood_species=None, paint_method=
         components[PAINT_SLOT_KEY]["item_name"] = paint_method if paint_method else default_paint
 
     return components, None
+
+
+def apply_box_back_frame_rule(components, height_cm, width_cm):
+    """
+    Large box frames need a small back-frame brace for structural
+    support. Unlike the wood/paint rules above, this is a structural
+    fact rather than a free-text interpretation choice, so it's applied
+    unconditionally — both for the free-text path and for structured/API
+    callers — not gated behind an `apply_business_rules` flag. It only
+    ever adds a component, and does nothing if the caller already
+    specified that slot themselves.
+    """
+    rule = studio_knowledge()["box_back_frame_rule"]
+    slot_key = rule["slot_key"]
+
+    if PROFILE_SLOT_KEY not in components or slot_key in components:
+        return components
+
+    profile_item = components[PROFILE_SLOT_KEY]["item_name"]
+    if not profile_item.startswith("Box ") or profile_item.startswith("Box Ready Wood"):
+        return components
+
+    perimeter_m = (height_cm + width_cm) * 2 / 100
+    if perimeter_m > rule["perimeter_threshold_m"]:
+        components[slot_key] = {"item_name": rule["default_item"], "quantity": 1.0}
+
+    return components

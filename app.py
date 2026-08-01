@@ -125,6 +125,11 @@ def price_parsed_lines(parsed_lines, apply_business_rules=False):
         components = catalog.resolve_components_dict(
             parsed.get("preset_key"), parsed.get("components", [])
         )
+        # Structural rule, not a language-interpretation nicety — applies
+        # unconditionally to every caller, structured or free-text.
+        components = business_rules.apply_box_back_frame_rule(
+            components, parsed["height_cm"], parsed["width_cm"]
+        )
         if apply_business_rules:
             components, error = business_rules.apply_wood_paint_rules(
                 catalog, components,
