@@ -177,6 +177,11 @@
   }
   select.line-edit:hover, select.line-edit:focus { color: var(--accent); border-bottom-color: var(--accent); outline: none; }
   .result .meta { color: var(--ink-muted); font-size: 0.82rem; margin-top: 10px; }
+  .subtotal-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-top: 12px; font-size: 0.88rem; color: var(--ink-muted);
+  }
+  .subtotal-row .amount { font-variant-numeric: tabular-nums; color: var(--ink); }
   .grand-total {
     display: flex; justify-content: space-between; align-items: baseline;
     margin-top: 18px; padding-top: 14px; border-top: 1.5px solid var(--ink);
@@ -527,6 +532,7 @@ function renderQuickQuoteResult(q) {
     html += `<div class="spec-line"><span class="label">${slotLabels[l.slot_key] || l.slot_key} — ${nameCell}</span><span class="amount">${fmt(l.line_total)}</span></div>`;
   }
   html += `<p class="meta">Quantity ${q.order_quantity} · Margin ${(q.margin*100).toFixed(1)}%</p>`;
+  html += `<div class="subtotal-row"><span>Price before VAT</span><span class="amount">${fmt(q.quantity_price)}</span></div>`;
   html += `<div class="grand-total"><span class="label">Total incl. VAT</span><span class="amount">${fmt(q.final_price_incl_vat)}</span></div>`;
   html += '</div>';
   resultEl.innerHTML = html;
@@ -629,6 +635,7 @@ document.getElementById('quote-submit').addEventListener('click', async () => {
         html += `<div class="spec-line"><span class="label">${slotLabels[l.slot_key] || l.slot_key} <span class="item">— ${l.item_name}</span></span><span class="amount">${fmt(l.line_total)}</span></div>`;
       }
       html += `<p class="meta">Quantity ${q.order_quantity} · Margin ${(q.margin*100).toFixed(1)}%</p>`;
+      html += `<div class="subtotal-row"><span>Price before VAT</span><span class="amount">${fmt(q.quantity_price)}</span></div>`;
       html += `<div class="grand-total"><span class="label">Total incl. VAT</span><span class="amount">${fmt(q.final_price_incl_vat)}</span></div>`;
       html += `</div>`;
     }
