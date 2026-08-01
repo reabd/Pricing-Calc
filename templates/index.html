@@ -121,6 +121,23 @@
     border-color: var(--accent); color: var(--ink); font-weight: 500;
     background: color-mix(in srgb, var(--accent) 10%, transparent);
   }
+
+  .option-group { margin-bottom: 18px; }
+  .option-group .group-label {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-muted); font-weight: 600; margin: 0 0 8px;
+  }
+  .option-group .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  button.option-pill {
+    font-family: inherit; font-size: 0.82rem; cursor: pointer; color: var(--ink-muted);
+    background: none; border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 14px;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  button.option-pill:hover { border-color: var(--accent); color: var(--ink); }
+  button.option-pill.selected {
+    border-color: var(--accent); color: var(--ink); font-weight: 500;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
   .measure-row { display: flex; flex-wrap: wrap; align-items: end; gap: 18px; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label {
@@ -223,6 +240,7 @@
     <div class="measure-panel" id="measure-panel">
       <p class="selected-name" id="measure-name"></p>
       <div class="variant-row" id="variant-row"></div>
+      <div id="options-groups"></div>
       <div class="measure-row">
         <div class="field">
           <label for="in-height">Height (cm)</label>
@@ -291,10 +309,15 @@ document.getElementById('excluded-list').innerHTML =
 function fmt(n) { return new Intl.NumberFormat('en-US', {maximumFractionDigits:0}).format(Math.round(n)); }
 
 let slotLabels = {};
+let presetComponents = {};
 (async () => {
-  const res = await fetch('/api/catalog');
-  const slots = await res.json();
+  const [catalogRes, presetsRes] = await Promise.all([fetch('/api/catalog'), fetch('/api/presets')]);
+  const slots = await catalogRes.json();
+  const presets = await presetsRes.json();
   slotLabels = Object.fromEntries(slots.map(s => [s.key, s.label]));
+  presetComponents = Object.fromEntries(presets.map(p => [
+    p.key, Object.fromEntries(p.components.map(c => [c.slot_key, c.item_name]))
+  ]));
 })();
 
 /* ---------------- Quick quote ---------------- */
@@ -338,8 +361,69 @@ const VARIANTS = {
   ],
 };
 
+// For any preset/variant whose components include one of these slots,
+// offer a plain-language choice instead of locking in the preset's
+// default item. Only applies when the slot is actually part of that
+// preset (e.g. a plain "Float Frame" has no paper, so no paper choice
+// appears for it — only its "+ Print"/"+ Facemount" variants do).
+const CUSTOMIZABLE_SLOTS = [
+  {
+    slot_key: 'row11_paper', label: 'Paper',
+    options: [
+      {item: 'RC Paper', label: 'RC Paper'},
+      {item: 'Fine Art', label: 'Fine Art'},
+      {item: 'Fine Art 100%', label: 'Fine Art 100%'},
+    ],
+  },
+  {
+    slot_key: 'row29_front_material', label: 'Finish',
+    options: [
+      {item: 'Acrylic Glossy 2mm', label: 'Glossy'},
+      {item: 'Acrylic Matt', label: 'Matt'},
+      {item: 'Acrylic True Life', label: 'True Life'},
+    ],
+  },
+];
+
 let selectedPreset = null;
 let selectedVariant = null;
+let customOverrides = {};
+
+function renderOptionGroups(presetKey) {
+  customOverrides = {};
+  const container = document.getElementById('options-groups');
+  container.innerHTML = '';
+  const components = presetComponents[presetKey] || {};
+
+  CUSTOMIZABLE_SLOTS.forEach(group => {
+    const defaultItem = components[group.slot_key];
+    if (!defaultItem) return; // this preset/variant doesn't use that slot
+
+    const wrap = document.createElement('div');
+    wrap.className = 'option-group';
+    const groupLabel = document.createElement('p');
+    groupLabel.className = 'group-label';
+    groupLabel.textContent = group.label;
+    wrap.appendChild(groupLabel);
+
+    const row = document.createElement('div');
+    row.className = 'pill-row';
+    group.options.forEach(opt => {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'option-pill' + (opt.item === defaultItem ? ' selected' : '');
+      pill.textContent = opt.label;
+      pill.addEventListener('click', () => {
+        customOverrides[group.slot_key] = opt.item;
+        row.querySelectorAll('.option-pill').forEach(el => el.classList.remove('selected'));
+        pill.classList.add('selected');
+      });
+      row.appendChild(pill);
+    });
+    wrap.appendChild(row);
+    container.appendChild(wrap);
+  });
+}
 
 const grid = document.getElementById('preset-grid');
 QUICK_PRESETS.forEach(p => {
@@ -360,6 +444,7 @@ function selectPreset(key, label) {
   document.getElementById('measure-panel').classList.add('open');
   document.getElementById('calc-result').innerHTML = '';
   document.getElementById('calc-status').innerHTML = '';
+  renderOptionGroups(key);
 
   const variantRow = document.getElementById('variant-row');
   variantRow.innerHTML = '';
@@ -374,6 +459,7 @@ function selectPreset(key, label) {
         selectedVariant = v.key;
         variantRow.querySelectorAll('.variant-pill').forEach(el => el.classList.remove('selected'));
         pill.classList.add('selected');
+        renderOptionGroups(v.key);
       });
       variantRow.appendChild(pill);
     });
@@ -391,10 +477,11 @@ document.getElementById('calc-btn').addEventListener('click', async () => {
   if (!h || !w) { resultEl.innerHTML = '<div class="error">Enter a height and width first.</div>'; return; }
 
   statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
+  const overrideComponents = Object.entries(customOverrides).map(([slot_key, item_name]) => ({slot_key, item_name}));
   try {
     const res = await fetch('/api/quote/structured', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({lines: [{height_cm: h, width_cm: w, order_quantity: qty, preset_key: selectedVariant, components: []}]})
+      body: JSON.stringify({lines: [{height_cm: h, width_cm: w, order_quantity: qty, preset_key: selectedVariant, components: overrideComponents}]})
     });
     const data = await res.json();
     statusEl.innerHTML = '';
