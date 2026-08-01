@@ -122,6 +122,12 @@
     background: color-mix(in srgb, var(--accent) 10%, transparent);
   }
 
+  .quick-checkbox {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    font-size: 0.88rem; color: var(--ink); margin-bottom: 18px; width: fit-content;
+  }
+  .quick-checkbox input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+
   .option-group { margin-bottom: 18px; }
   .option-group .group-label {
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
@@ -246,6 +252,9 @@
     <div class="measure-panel" id="measure-panel">
       <p class="selected-name" id="measure-name"></p>
       <div class="variant-row" id="variant-row"></div>
+      <label class="quick-checkbox" id="art-glass-row" style="display:none;">
+        <input type="checkbox" id="art-glass-check"> <span id="art-glass-label-text">Art Glass 70%</span>
+      </label>
       <div id="options-groups"></div>
       <div class="measure-row">
         <div class="field">
@@ -426,8 +435,18 @@ let selectedPreset = null;
 let selectedVariantObj = null; // {key, label, extra?: [{slot_key, item_name}]}
 let customOverrides = {};
 
+// Cards where the quick Art Glass 70% upgrade checkbox is offered.
+const ART_GLASS_CARDS = ['box', 'aluminium'];
+
 function renderOptionGroups(variant) {
   customOverrides = {};
+
+  const artGlassRow = document.getElementById('art-glass-row');
+  const artGlassCheckbox = document.getElementById('art-glass-check');
+  artGlassCheckbox.checked = false;
+  document.getElementById('art-glass-label-text').textContent = 'Art Glass 70%';
+  artGlassRow.style.display = ART_GLASS_CARDS.includes(selectedPreset) ? 'flex' : 'none';
+
   const container = document.getElementById('options-groups');
   container.innerHTML = '';
   const components = {...(presetComponents[variant.key] || {})};
@@ -463,6 +482,15 @@ function renderOptionGroups(variant) {
     container.appendChild(wrap);
   });
 }
+
+document.getElementById('art-glass-check').addEventListener('change', (e) => {
+  if (e.target.checked) {
+    customOverrides['row24_glasses'] = 'Art Glass 70%';
+  } else {
+    delete customOverrides['row24_glasses'];
+  }
+  if (currentJob) performCalculation(); // already showing a result — refresh it live
+});
 
 const grid = document.getElementById('preset-grid');
 QUICK_PRESETS.forEach(p => {
@@ -570,6 +598,36 @@ function renderQuickQuoteResult(q) {
       recalcQuickQuote(components);
     });
   });
+
+  updateArtGlassLabel(q.lines);
+}
+
+// Shows what checking the Art Glass 70% box would actually add to the
+// price, at the current size — e.g. "Art Glass 70% (+264)" — rather than
+// a vague "(upgrade)". Priced via a tiny standalone line, since a
+// component's own material/work cost only depends on its item + the
+// job's height/width, not on quantity/discounts or the other components.
+async function updateArtGlassLabel(currentLines) {
+  const checkbox = document.getElementById('art-glass-check');
+  const textEl = document.getElementById('art-glass-label-text');
+  if (!ART_GLASS_CARDS.includes(selectedPreset)) return;
+  if (checkbox.checked) { textEl.textContent = 'Art Glass 70%'; return; }
+
+  const currentGlassLine = currentLines.find(l => l.slot_key === 'row24_glasses');
+  const currentTotal = currentGlassLine ? currentGlassLine.line_total : 0;
+  try {
+    const res = await fetch('/api/quote/structured', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({lines: [{...currentJob, preset_key: null,
+        components: [{slot_key: 'row24_glasses', item_name: 'Art Glass 70%'}]}]})
+    });
+    const data = await res.json();
+    const artLine = data.quotes[0].lines.find(l => l.slot_key === 'row24_glasses');
+    const delta = artLine.line_total - currentTotal;
+    textEl.textContent = `Art Glass 70% (+${fmt(delta)})`;
+  } catch (e) {
+    textEl.textContent = 'Art Glass 70%';
+  }
 }
 
 // Fetches a price for `components` against the currently active job
