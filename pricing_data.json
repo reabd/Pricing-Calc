@@ -3088,7 +3088,7 @@
     {
       "key": "canvas",
       "macro_name": "Canvas",
-      "label": "Canvas Stretch",
+      "label": "Float for Canvas",
       "components": [
         {
           "slot_key": "row12_lamelo",

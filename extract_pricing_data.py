@@ -152,7 +152,7 @@ PRESET_LABELS = {
     "LightBox": "Light Box",
     "Float": "Float Frame (no print — for an existing piece)",
     "Float_Chromalux": "Float Frame + Chromalux",
-    "Canvas": "Canvas Stretch",
+    "Canvas": "Float for Canvas",
     "Facemount": "Facemount",
     "Facemount_Float": "Float Frame + Print, Acrylic Facemount",
     "Kapa_Float": "Float Frame + Print (default — Kapa back)",
