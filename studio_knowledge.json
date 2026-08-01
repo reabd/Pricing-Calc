@@ -31,5 +31,11 @@
   "float_profile_size_aliases": {
     "big": "3/6",
     "notes": "For the row23_profile_preset slot, when the chosen item is a 'Float Dibond/Kapa' profile, the studio's default family is 3/4.5. If the customer describes wanting a 'big' / 'large' / 'wide' float profile, use the 3/6 family instead, keeping whatever simple/special tier otherwise applies. This only applies to Float Dibond/Kapa items, not Box or Canvas profiles."
+  },
+  "preset_hints": {
+    "box_drawing": {
+      "trigger_terms": ["work on paper", "paper artwork", "drawing", "original on paper", "watercolor", "watercolour"],
+      "notes": "When a customer wants a box frame for an existing 'work on paper' (a drawing, watercolor, or similar paper-based original — not a new print job), use the 'box_drawing' preset (labeled '+ Drawing' in the UI), not the base 'box' preset. It uses a paper-safe hinging method instead of a Kapaline-backed print mount, which is what a work on paper actually needs."
+    }
   }
 }

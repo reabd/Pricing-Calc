@@ -234,6 +234,7 @@ def parse_quote_request(text, catalog):
     knowledge = studio_knowledge()
     wood = knowledge["wood_species"]
     aliases = knowledge.get("vocabulary_aliases", {})
+    preset_hints = knowledge.get("preset_hints", {})
 
     system_prompt = (
         "You convert free-text pricing requests (Hebrew or English) for a print/framing studio "
@@ -251,6 +252,14 @@ def parse_quote_request(text, catalog):
         "and the Kapa backing board that a floated print needs) — do not build this combination "
         "manually from 'float' plus ad-hoc components. Only use 'facemount_float' instead if the "
         "user explicitly asks for an acrylic facemount finish.\n\n"
+        "PRESET SELECTION HINTS — situations where the right preset isn't the obvious literal "
+        "name match:\n"
+        + "".join(
+            f"  - use preset '{preset_key}' when the customer mentions any of: "
+            f"{', '.join(hint['trigger_terms'])}. {hint['notes']}\n"
+            for preset_key, hint in preset_hints.items()
+        )
+        + "\n"
         "WOOD SPECIES: if the user names one of these species for the frame, set wood_species "
         "to it verbatim (do not pick a profile item yourself, do not put it in 'components' — a "
         "separate deterministic step resolves it):\n"
