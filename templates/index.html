@@ -348,14 +348,18 @@ const QUICK_PRESETS = [
   {key: 'print_on_dbond', label: 'Print on Dibond'},
 ];
 
-// Variants are separate, already-tested combinations from the studio's
-// Excel (each is its own macro button there) — not freely combinable,
-// so picking one just swaps which preset_key gets priced.
+// Variants are either a separate, already-tested combination from the
+// studio's Excel (its own macro button there — e.g. "+ Print"), or the
+// base preset plus a genuinely independent add-on component that isn't
+// its own preset in the Excel (e.g. "+ Passpartout": a mat board dropped
+// into the frame opening, unaffected by profile/paint choices). The
+// latter carry an `extra` list of components layered on top of the base.
 const VARIANTS = {
   box: [
     {key: 'box', label: 'Frame only'},
     {key: 'box_mount_print', label: '+ Print'},
     {key: 'box_drawing', label: '+ Drawing'},
+    {key: 'box', label: '+ Passpartout', extra: [{slot_key: 'row26_passpartout', item_name: 'Museum Book 4ply'}]},
   ],
   float: [
     {key: 'float', label: 'Frame only'},
@@ -366,6 +370,7 @@ const VARIANTS = {
     {key: 'aluminium', label: 'Frame only'},
     {key: 'aluminium_print', label: '+ Print'},
     {key: 'aluminium_drawing', label: '+ Drawing'},
+    {key: 'aluminium', label: '+ Passpartout', extra: [{slot_key: 'row26_passpartout', item_name: 'Museum Book 4ply'}]},
   ],
 };
 
@@ -399,17 +404,25 @@ const CUSTOMIZABLE_SLOTS = [
       {item: 'Hinjes with japanies paper', label: 'Hinges (Japanese Paper)'},
     ],
   },
+  {
+    slot_key: 'row26_passpartout', label: 'Passpartout',
+    options: [
+      {item: 'Museum Book 4ply', label: 'Museum Book 4 ply'},
+      {item: 'Museum Book 8ply', label: 'Museum Book 8 ply'},
+    ],
+  },
 ];
 
 let selectedPreset = null;
-let selectedVariant = null;
+let selectedVariantObj = null; // {key, label, extra?: [{slot_key, item_name}]}
 let customOverrides = {};
 
-function renderOptionGroups(presetKey) {
+function renderOptionGroups(variant) {
   customOverrides = {};
   const container = document.getElementById('options-groups');
   container.innerHTML = '';
-  const components = presetComponents[presetKey] || {};
+  const components = {...(presetComponents[variant.key] || {})};
+  (variant.extra || []).forEach(c => { components[c.slot_key] = c.item_name; });
 
   CUSTOMIZABLE_SLOTS.forEach(group => {
     const defaultItem = components[group.slot_key];
@@ -454,32 +467,35 @@ QUICK_PRESETS.forEach(p => {
 
 function selectPreset(key, label) {
   selectedPreset = key;
-  selectedVariant = key;
   document.querySelectorAll('.preset-card').forEach(b => b.classList.toggle('selected', b.dataset.key === key));
   document.getElementById('measure-name').textContent = label;
   document.getElementById('measure-panel').classList.add('open');
   document.getElementById('calc-result').innerHTML = '';
   document.getElementById('calc-status').innerHTML = '';
-  renderOptionGroups(key);
 
   const variantRow = document.getElementById('variant-row');
   variantRow.innerHTML = '';
   const variants = VARIANTS[key];
+
   if (variants) {
-    variants.forEach(v => {
+    variants.forEach((v, idx) => {
       const pill = document.createElement('button');
       pill.type = 'button';
-      pill.className = 'variant-pill' + (v.key === key ? ' selected' : '');
+      pill.className = 'variant-pill' + (idx === 0 ? ' selected' : '');
       pill.textContent = v.label;
       pill.addEventListener('click', () => {
-        selectedVariant = v.key;
+        selectedVariantObj = v;
         variantRow.querySelectorAll('.variant-pill').forEach(el => el.classList.remove('selected'));
         pill.classList.add('selected');
-        renderOptionGroups(v.key);
+        renderOptionGroups(v);
       });
       variantRow.appendChild(pill);
     });
+    selectedVariantObj = variants[0];
+  } else {
+    selectedVariantObj = {key, label, extra: []};
   }
+  renderOptionGroups(selectedVariantObj);
 }
 
 let currentJob = null; // {height_cm, width_cm, order_quantity} for the active Quick Quote result
@@ -543,11 +559,14 @@ document.getElementById('calc-btn').addEventListener('click', async () => {
 
   currentJob = {height_cm: h, width_cm: w, order_quantity: qty};
   statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
-  const overrideComponents = Object.entries(customOverrides).map(([slot_key, item_name]) => ({slot_key, item_name}));
+  const merged = {};
+  (selectedVariantObj.extra || []).forEach(c => { merged[c.slot_key] = c.item_name; });
+  Object.entries(customOverrides).forEach(([slot_key, item_name]) => { merged[slot_key] = item_name; });
+  const overrideComponents = Object.entries(merged).map(([slot_key, item_name]) => ({slot_key, item_name}));
   try {
     const res = await fetch('/api/quote/structured', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({lines: [{...currentJob, preset_key: selectedVariant, components: overrideComponents}]})
+      body: JSON.stringify({lines: [{...currentJob, preset_key: selectedVariantObj.key, components: overrideComponents}]})
     });
     const data = await res.json();
     statusEl.innerHTML = '';
