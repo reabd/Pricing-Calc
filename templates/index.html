@@ -453,6 +453,7 @@ function renderOptionGroups(variant) {
         customOverrides[group.slot_key] = opt.item;
         row.querySelectorAll('.option-pill').forEach(el => el.classList.remove('selected'));
         pill.classList.add('selected');
+        if (currentJob) performCalculation(); // already showing a result — refresh it live
       });
       row.appendChild(pill);
     });
@@ -474,6 +475,7 @@ QUICK_PRESETS.forEach(p => {
 
 function selectPreset(p) {
   selectedPreset = p.key;
+  currentJob = null; // switching frame type — start fresh, require an explicit Calculate
   document.querySelectorAll('.preset-card').forEach(b => b.classList.toggle('selected', b.dataset.key === p.key));
   document.getElementById('measure-name').textContent = p.label;
   document.getElementById('measure-panel').classList.add('open');
@@ -495,6 +497,7 @@ function selectPreset(p) {
         variantRow.querySelectorAll('.variant-pill').forEach(el => el.classList.remove('selected'));
         pill.classList.add('selected');
         renderOptionGroups(v);
+        if (currentJob) performCalculation(); // already showing a result — refresh it live
       });
       variantRow.appendChild(pill);
     });
@@ -539,14 +542,19 @@ function renderQuickQuoteResult(q) {
   });
 }
 
-async function recalcQuickQuote(components) {
+// Fetches a price for `components` against the currently active job
+// (size/quantity) and preset, and re-renders the result in place. Used
+// both by the initial "Calculate" click and by every pill/dropdown
+// change afterwards, so the price always stays live once a result is
+// showing — no need to press Calculate again.
+async function fetchAndRenderQuote(presetKey, components) {
   const statusEl = document.getElementById('calc-status');
   const resultEl = document.getElementById('calc-result');
   statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
   try {
     const res = await fetch('/api/quote/structured', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({lines: [{...currentJob, preset_key: null, components}]})
+      body: JSON.stringify({lines: [{...currentJob, preset_key: presetKey, components}]})
     });
     const data = await res.json();
     statusEl.innerHTML = '';
@@ -558,35 +566,29 @@ async function recalcQuickQuote(components) {
   }
 }
 
-document.getElementById('calc-btn').addEventListener('click', async () => {
+function performCalculation() {
+  const merged = {};
+  (selectedVariantObj.extra || []).forEach(c => { merged[c.slot_key] = c.item_name; });
+  Object.entries(customOverrides).forEach(([slot_key, item_name]) => { merged[slot_key] = item_name; });
+  const overrideComponents = Object.entries(merged).map(([slot_key, item_name]) => ({slot_key, item_name}));
+  fetchAndRenderQuote(selectedVariantObj.key, overrideComponents);
+}
+
+function recalcQuickQuote(components) {
+  fetchAndRenderQuote(null, components);
+}
+
+document.getElementById('calc-btn').addEventListener('click', () => {
   const h = parseFloat(document.getElementById('in-height').value);
   const w = parseFloat(document.getElementById('in-width').value);
   const qty = parseFloat(document.getElementById('in-qty').value) || 1;
-  const statusEl = document.getElementById('calc-status');
   const resultEl = document.getElementById('calc-result');
   resultEl.innerHTML = '';
   if (!selectedPreset) return;
   if (!h || !w) { resultEl.innerHTML = '<div class="error">Enter a height and width first.</div>'; return; }
 
   currentJob = {height_cm: h, width_cm: w, order_quantity: qty};
-  statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
-  const merged = {};
-  (selectedVariantObj.extra || []).forEach(c => { merged[c.slot_key] = c.item_name; });
-  Object.entries(customOverrides).forEach(([slot_key, item_name]) => { merged[slot_key] = item_name; });
-  const overrideComponents = Object.entries(merged).map(([slot_key, item_name]) => ({slot_key, item_name}));
-  try {
-    const res = await fetch('/api/quote/structured', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({lines: [{...currentJob, preset_key: selectedVariantObj.key, components: overrideComponents}]})
-    });
-    const data = await res.json();
-    statusEl.innerHTML = '';
-    if (data.error) { resultEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
-    renderQuickQuoteResult(data.quotes[0]);
-  } catch (e) {
-    statusEl.innerHTML = '';
-    resultEl.innerHTML = `<div class="error">${e}</div>`;
-  }
+  performCalculation();
 });
 
 /* ---------------- Secondary tabs ---------------- */
