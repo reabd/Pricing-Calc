@@ -477,12 +477,19 @@ QUICK_PRESETS.forEach(p => {
 
 function selectPreset(p) {
   selectedPreset = p.key;
-  currentJob = null; // switching frame type — start fresh, require an explicit Calculate
   document.querySelectorAll('.preset-card').forEach(b => b.classList.toggle('selected', b.dataset.key === p.key));
   document.getElementById('measure-name').textContent = p.label;
   document.getElementById('measure-panel').classList.add('open');
   document.getElementById('calc-result').innerHTML = '';
   document.getElementById('calc-status').innerHTML = '';
+
+  // If a size was already entered (from before, or a previous preset),
+  // carry it over and price the new preset immediately — no need to
+  // press Calculate again just for switching frame types.
+  const h = parseFloat(document.getElementById('in-height').value);
+  const w = parseFloat(document.getElementById('in-width').value);
+  const qty = parseFloat(document.getElementById('in-qty').value) || 1;
+  currentJob = (h > 0 && w > 0) ? {height_cm: h, width_cm: w, order_quantity: qty} : null;
 
   const variantRow = document.getElementById('variant-row');
   variantRow.innerHTML = '';
@@ -512,6 +519,7 @@ function selectPreset(p) {
     };
   }
   renderOptionGroups(selectedVariantObj);
+  if (currentJob) performCalculation();
 }
 
 let currentJob = null; // {height_cm, width_cm, order_quantity} for the active Quick Quote result
