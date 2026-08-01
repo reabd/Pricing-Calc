@@ -338,6 +338,7 @@ const ICONS = {
   facemount: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="36"/><line x1="12" y1="34" x2="34" y2="12"/></svg>',
   print_on_dbond: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="34"/><line x1="6" y1="42" x2="42" y2="42"/></svg>',
   print_only: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 6 H30 L38 14 V42 H10 Z"/><path d="M30 6 V14 H38"/></svg>',
+  lightbox: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="10" y="10" width="28" height="28"/><line x1="24" y1="2" x2="24" y2="7"/><line x1="24" y1="41" x2="24" y2="46"/><line x1="2" y1="24" x2="7" y2="24"/><line x1="41" y1="24" x2="46" y2="24"/></svg>',
 };
 
 // Most cards map straight to a real preset in the catalog (key ==
@@ -353,6 +354,7 @@ const QUICK_PRESETS = [
   {key: 'facemount', label: 'Facemount'},
   {key: 'print_on_dbond', label: 'Print + Dibond'},
   {key: 'print_only', label: 'Print Only', presetKey: null, extra: [{slot_key: 'row11_paper', item_name: 'Fine Art'}]},
+  {key: 'lightbox', label: 'Lightbox'},
 ];
 
 // Variants are either a separate, already-tested combination from the
