@@ -337,8 +337,14 @@ const ICONS = {
   canvas: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="8" width="32" height="32"/><path d="M8 8 L14 14"/><path d="M40 8 L34 14"/><path d="M8 40 L14 34"/><path d="M40 40 L34 34"/></svg>',
   facemount: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="36"/><line x1="12" y1="34" x2="34" y2="12"/></svg>',
   print_on_dbond: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="34"/><line x1="6" y1="42" x2="42" y2="42"/></svg>',
+  print_only: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 6 H30 L38 14 V42 H10 Z"/><path d="M30 6 V14 H38"/></svg>',
 };
 
+// Most cards map straight to a real preset in the catalog (key ==
+// presetKey). "Print Only" doesn't exist as a preset in the Excel — it's
+// just the Paper component on its own, no mount/frame/glass at all — so
+// it sets presetKey to null (meaning "use `extra` as the full explicit
+// component list", same mechanism the +Passpartout variants use).
 const QUICK_PRESETS = [
   {key: 'box', label: 'Box Frame'},
   {key: 'float', label: 'Float Frame'},
@@ -346,6 +352,7 @@ const QUICK_PRESETS = [
   {key: 'canvas', label: 'Float for Canvas'},
   {key: 'facemount', label: 'Facemount'},
   {key: 'print_on_dbond', label: 'Print + Dibond'},
+  {key: 'print_only', label: 'Print Only', presetKey: null, extra: [{slot_key: 'row11_paper', item_name: 'Fine Art'}]},
 ];
 
 // Variants are either a separate, already-tested combination from the
@@ -461,21 +468,21 @@ QUICK_PRESETS.forEach(p => {
   btn.type = 'button';
   btn.dataset.key = p.key;
   btn.innerHTML = `${ICONS[p.key] || ''}<span class="name">${p.label}</span>`;
-  btn.addEventListener('click', () => selectPreset(p.key, p.label));
+  btn.addEventListener('click', () => selectPreset(p));
   grid.appendChild(btn);
 });
 
-function selectPreset(key, label) {
-  selectedPreset = key;
-  document.querySelectorAll('.preset-card').forEach(b => b.classList.toggle('selected', b.dataset.key === key));
-  document.getElementById('measure-name').textContent = label;
+function selectPreset(p) {
+  selectedPreset = p.key;
+  document.querySelectorAll('.preset-card').forEach(b => b.classList.toggle('selected', b.dataset.key === p.key));
+  document.getElementById('measure-name').textContent = p.label;
   document.getElementById('measure-panel').classList.add('open');
   document.getElementById('calc-result').innerHTML = '';
   document.getElementById('calc-status').innerHTML = '';
 
   const variantRow = document.getElementById('variant-row');
   variantRow.innerHTML = '';
-  const variants = VARIANTS[key];
+  const variants = VARIANTS[p.key];
 
   if (variants) {
     variants.forEach((v, idx) => {
@@ -493,7 +500,11 @@ function selectPreset(key, label) {
     });
     selectedVariantObj = variants[0];
   } else {
-    selectedVariantObj = {key, label, extra: []};
+    selectedVariantObj = {
+      key: p.presetKey !== undefined ? p.presetKey : p.key,
+      label: p.label,
+      extra: p.extra || [],
+    };
   }
   renderOptionGroups(selectedVariantObj);
 }
