@@ -109,6 +109,18 @@
   .measure-panel .selected-name {
     font-family: "Instrument Serif", Georgia, serif; font-size: 1.2rem; margin: 0 0 18px;
   }
+  .variant-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .variant-row:empty { margin-bottom: 0; }
+  button.variant-pill {
+    font-family: inherit; font-size: 0.82rem; cursor: pointer; color: var(--ink-muted);
+    background: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  button.variant-pill:hover { border-color: var(--accent); color: var(--ink); }
+  button.variant-pill.selected {
+    border-color: var(--accent); color: var(--ink); font-weight: 500;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
   .measure-row { display: flex; flex-wrap: wrap; align-items: end; gap: 18px; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label {
@@ -210,6 +222,7 @@
 
     <div class="measure-panel" id="measure-panel">
       <p class="selected-name" id="measure-name"></p>
+      <div class="variant-row" id="variant-row"></div>
       <div class="measure-row">
         <div class="field">
           <label for="in-height">Height (cm)</label>
@@ -306,7 +319,29 @@ const QUICK_PRESETS = [
   {key: 'print_on_dbond', label: 'Print on Dibond'},
 ];
 
+// Variants are separate, already-tested combinations from the studio's
+// Excel (each is its own macro button there) — not freely combinable,
+// so picking one just swaps which preset_key gets priced.
+const VARIANTS = {
+  box: [
+    {key: 'box', label: 'Frame only'},
+    {key: 'box_mount_print', label: '+ Print'},
+    {key: 'box_drawing', label: '+ Drawing'},
+  ],
+  float: [
+    {key: 'float', label: 'Frame only'},
+    {key: 'kapa_float', label: '+ Print'},
+    {key: 'float_chromalux', label: '+ Chromalux'},
+  ],
+  aluminium: [
+    {key: 'aluminium', label: 'Frame only'},
+    {key: 'aluminium_print', label: '+ Print'},
+    {key: 'aluminium_drawing', label: '+ Drawing'},
+  ],
+};
+
 let selectedPreset = null;
+let selectedVariant = null;
 
 const grid = document.getElementById('preset-grid');
 QUICK_PRESETS.forEach(p => {
@@ -321,11 +356,30 @@ QUICK_PRESETS.forEach(p => {
 
 function selectPreset(key, label) {
   selectedPreset = key;
+  selectedVariant = key;
   document.querySelectorAll('.preset-card').forEach(b => b.classList.toggle('selected', b.dataset.key === key));
   document.getElementById('measure-name').textContent = label;
   document.getElementById('measure-panel').classList.add('open');
   document.getElementById('calc-result').innerHTML = '';
   document.getElementById('calc-status').innerHTML = '';
+
+  const variantRow = document.getElementById('variant-row');
+  variantRow.innerHTML = '';
+  const variants = VARIANTS[key];
+  if (variants) {
+    variants.forEach(v => {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'variant-pill' + (v.key === key ? ' selected' : '');
+      pill.textContent = v.label;
+      pill.addEventListener('click', () => {
+        selectedVariant = v.key;
+        variantRow.querySelectorAll('.variant-pill').forEach(el => el.classList.remove('selected'));
+        pill.classList.add('selected');
+      });
+      variantRow.appendChild(pill);
+    });
+  }
 }
 
 document.getElementById('calc-btn').addEventListener('click', async () => {
@@ -342,7 +396,7 @@ document.getElementById('calc-btn').addEventListener('click', async () => {
   try {
     const res = await fetch('/api/quote/structured', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({lines: [{height_cm: h, width_cm: w, order_quantity: qty, preset_key: selectedPreset, components: []}]})
+      body: JSON.stringify({lines: [{height_cm: h, width_cm: w, order_quantity: qty, preset_key: selectedVariant, components: []}]})
     });
     const data = await res.json();
     statusEl.innerHTML = '';
