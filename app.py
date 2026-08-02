@@ -239,13 +239,12 @@ def api_price_list():
     return jsonify(list(catalog.slots.values()))
 
 
-# Fields editable directly in the Price List table (Indirect %/Risk % on
-# both the material and labor side). Deliberately excludes fixed/var cost
-# and profit % — those stay adjustable only through Update Prices, so
-# there's one considered (preview-then-confirm) path for the numbers that
-# most directly set what customers pay, and a quicker direct-edit path for
-# the overhead assumptions.
-EDITABLE_PRICE_LIST_FIELDS = {"material_indirect", "material_risk", "effort_indirect", "effort_risk"}
+# Every cost-driver field on an item is directly editable in the Price
+# List table.
+EDITABLE_PRICE_LIST_FIELDS = {
+    "fixed_material_cost", "var_material_cost", "material_indirect", "material_risk", "material_profit",
+    "fixed_effort_cost", "var_effort_cost", "min_effort_cost", "effort_indirect", "effort_risk", "effort_profit",
+}
 
 
 @app.route("/api/price-list/update-item", methods=["POST"])
