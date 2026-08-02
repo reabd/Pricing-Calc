@@ -437,15 +437,23 @@ let customOverrides = {};
 
 // Cards where the quick Art Glass 70% upgrade checkbox is offered.
 const ART_GLASS_CARDS = ['box', 'aluminium'];
+// Persists across preset/variant switches (unlike customOverrides, which
+// resets every time) — checking it once should stick as you move between
+// Box/Aluminium and their +Print/+Drawing/+Passpartout variants.
+let artGlassChecked = false;
 
 function renderOptionGroups(variant) {
   customOverrides = {};
 
   const artGlassRow = document.getElementById('art-glass-row');
   const artGlassCheckbox = document.getElementById('art-glass-check');
-  artGlassCheckbox.checked = false;
+  const onArtGlassCard = ART_GLASS_CARDS.includes(selectedPreset);
+  artGlassCheckbox.checked = onArtGlassCard && artGlassChecked;
+  if (onArtGlassCard && artGlassChecked) {
+    customOverrides['row24_glasses'] = 'Art Glass 70%';
+  }
   document.getElementById('art-glass-label-text').textContent = 'Art Glass 70%';
-  artGlassRow.style.display = ART_GLASS_CARDS.includes(selectedPreset) ? 'flex' : 'none';
+  artGlassRow.style.display = onArtGlassCard ? 'flex' : 'none';
 
   const container = document.getElementById('options-groups');
   container.innerHTML = '';
@@ -484,7 +492,8 @@ function renderOptionGroups(variant) {
 }
 
 document.getElementById('art-glass-check').addEventListener('change', (e) => {
-  if (e.target.checked) {
+  artGlassChecked = e.target.checked;
+  if (artGlassChecked) {
     customOverrides['row24_glasses'] = 'Art Glass 70%';
   } else {
     delete customOverrides['row24_glasses'];
