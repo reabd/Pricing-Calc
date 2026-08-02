@@ -225,6 +225,16 @@
   .error { color: var(--danger); margin-top: 10px; font-size: 0.9rem; }
   .muted { color: var(--ink-muted); font-size: 0.85rem; }
 
+  input.pct-input {
+    width: 52px; font-family: "IBM Plex Mono", monospace; font-size: 0.85rem;
+    font-variant-numeric: tabular-nums; text-align: end; padding: 3px 4px;
+    border-radius: var(--radius); border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  input.pct-input:focus { border-color: var(--accent); outline: none; }
+  input.pct-input.save-ok { border-color: #5a9c6e; background: color-mix(in srgb, #5a9c6e 12%, var(--paper)); }
+  input.pct-input.save-error { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--paper)); }
+
   details { border-bottom: 1px solid var(--line); padding: 10px 0; }
   summary { cursor: pointer; font-weight: 500; font-size: 0.92rem; }
   summary::marker { color: var(--ink-muted); }
@@ -843,14 +853,51 @@ async function loadPriceList() {
   let html = '';
   for (const slot of slots) {
     html += `<details><summary>${slot.label} <span class="muted">(${slot.kind}, ${slot.size_mode}) — ${Object.keys(slot.items).length} item(s)</span></summary>`;
-    html += `<div class="table-wrap"><table><thead><tr><th>Item</th><th class="num">Fixed cost</th><th class="num">Var cost</th><th class="num">Material profit %</th></tr></thead><tbody>`;
+    html += `<div class="table-wrap"><table><thead><tr>`
+      + `<th>Item</th><th class="num">Fixed cost</th><th class="num">Var cost</th>`
+      + `<th class="num">Material indirect %</th><th class="num">Material risk %</th><th class="num">Material profit %</th>`
+      + `<th class="num">Effort indirect %</th><th class="num">Effort risk %</th>`
+      + `</tr></thead><tbody>`;
     for (const [name, item] of Object.entries(slot.items)) {
-      html += `<tr><td>${name}</td><td class="num">${fmt(item.fixed_material_cost)}</td><td class="num">${fmt(item.var_material_cost)}</td><td class="num">${(item.material_profit*100).toFixed(0)}%</td></tr>`;
+      html += `<tr><td>${name}</td><td class="num">${fmt(item.fixed_material_cost)}</td><td class="num">${fmt(item.var_material_cost)}</td>`
+        + pctInputCell(slot.key, name, 'material_indirect', item.material_indirect)
+        + pctInputCell(slot.key, name, 'material_risk', item.material_risk)
+        + `<td class="num">${(item.material_profit*100).toFixed(0)}%</td>`
+        + pctInputCell(slot.key, name, 'effort_indirect', item.effort_indirect)
+        + pctInputCell(slot.key, name, 'effort_risk', item.effort_risk)
+        + `</tr>`;
     }
     html += `</tbody></table></div></details>`;
   }
   el.innerHTML = html;
+
+  el.querySelectorAll('.pct-input').forEach(input => {
+    input.addEventListener('change', async () => {
+      const {slot: slotKey, item: itemName, field} = input.dataset;
+      const pct = parseFloat(input.value);
+      if (isNaN(pct)) return;
+      input.classList.remove('save-ok', 'save-error');
+      try {
+        const res = await fetch('/api/price-list/update-item', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({slot_key: slotKey, item_name: itemName, field, value: pct / 100})
+        });
+        const data = await res.json();
+        input.classList.add(data.error ? 'save-error' : 'save-ok');
+        if (data.error) console.error(data.error);
+      } catch (e) {
+        input.classList.add('save-error');
+      }
+      setTimeout(() => input.classList.remove('save-ok', 'save-error'), 1500);
+    });
+  });
+
   window.__pricelistLoaded = true;
+}
+
+function pctInputCell(slotKey, itemName, field, value) {
+  return `<td class="num"><input type="number" class="pct-input" step="1" value="${Math.round(value*100)}" `
+    + `data-slot="${slotKey}" data-item="${itemName}" data-field="${field}">%</td>`;
 }
 </script>
 </body>

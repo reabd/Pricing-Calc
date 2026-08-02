@@ -239,6 +239,40 @@ def api_price_list():
     return jsonify(list(catalog.slots.values()))
 
 
+# Fields editable directly in the Price List table (Indirect %/Risk % on
+# both the material and labor side). Deliberately excludes fixed/var cost
+# and profit % — those stay adjustable only through Update Prices, so
+# there's one considered (preview-then-confirm) path for the numbers that
+# most directly set what customers pay, and a quicker direct-edit path for
+# the overhead assumptions.
+EDITABLE_PRICE_LIST_FIELDS = {"material_indirect", "material_risk", "effort_indirect", "effort_risk"}
+
+
+@app.route("/api/price-list/update-item", methods=["POST"])
+def api_price_list_update_item():
+    data = request.json or {}
+    slot_key = data.get("slot_key")
+    item_name = data.get("item_name")
+    field = data.get("field")
+    value = data.get("value")
+
+    if field not in EDITABLE_PRICE_LIST_FIELDS:
+        return jsonify({"error": f"Field {field!r} can't be edited here."}), 400
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Value must be a number."}), 400
+
+    try:
+        slot, resolved_name, _item = catalog.find_item(slot_key, item_name)
+    except PricingError as e:
+        return jsonify({"error": str(e)}), 400
+
+    slot["items"][resolved_name][field] = value
+    catalog.save()
+    return jsonify({"status": "saved"})
+
+
 if __name__ == "__main__":
     # host="0.0.0.0" makes this reachable from other computers on the same
     # network (not just this machine). debug=False is intentional here:
