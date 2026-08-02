@@ -112,12 +112,19 @@ class PricingCatalog:
         preset's choice for that slot if present, or adds a new component
         if the slot wasn't part of the preset at all. Pass preset_key=None
         to use `overrides` as the full component list.
+
+        An override with item_name=None means "remove this component
+        entirely", even if the preset itself would otherwise include it
+        (e.g. a "No Print" choice removing a preset's own paper line).
         """
         merged = {}
         if preset_key:
             for comp in self.get_preset(preset_key)["components"]:
                 merged[comp["slot_key"]] = {"item_name": comp["item_name"], "quantity": 1.0}
         for comp in overrides:
+            if comp.get("item_name") is None:
+                merged.pop(comp["slot_key"], None)
+                continue
             merged[comp["slot_key"]] = {
                 "item_name": comp["item_name"],
                 "quantity": comp.get("quantity", 1.0),
