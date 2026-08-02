@@ -480,7 +480,12 @@ function renderOptionGroups(variant) {
 
     const row = document.createElement('div');
     row.className = 'pill-row';
-    group.options.forEach(opt => {
+    // "No Print" makes no sense on the Print Only card — that card's
+    // entire purpose is the print itself.
+    const options = group.slot_key === 'row11_paper' && selectedPreset === 'print_only'
+      ? group.options.filter(opt => opt.item !== null)
+      : group.options;
+    options.forEach(opt => {
       const pill = document.createElement('button');
       pill.type = 'button';
       pill.className = 'option-pill' + (opt.item === defaultItem ? ' selected' : '');
