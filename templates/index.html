@@ -675,7 +675,7 @@ function recalcQuickQuote(components) {
   fetchAndRenderQuote(null, components);
 }
 
-document.getElementById('calc-btn').addEventListener('click', () => {
+function handleCalculateClick() {
   const h = parseFloat(document.getElementById('in-height').value);
   const w = parseFloat(document.getElementById('in-width').value);
   const qty = parseFloat(document.getElementById('in-qty').value) || 1;
@@ -686,6 +686,19 @@ document.getElementById('calc-btn').addEventListener('click', () => {
 
   currentJob = {height_cm: h, width_cm: w, order_quantity: qty};
   performCalculation();
+}
+
+document.getElementById('calc-btn').addEventListener('click', handleCalculateClick);
+
+// Pressing Enter in any of the size fields calculates too, instead of
+// requiring a click on the Calculate button.
+['in-height', 'in-width', 'in-qty'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCalculateClick();
+    }
+  });
 });
 
 /* ---------------- Secondary tabs ---------------- */
