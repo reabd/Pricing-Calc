@@ -32,10 +32,19 @@
     "big": "3/6",
     "notes": "For the row23_profile_preset slot, when the chosen item is a 'Float Dibond/Kapa' profile, the studio's default family is 3/4.5. If the customer describes wanting a 'big' / 'large' / 'wide' float profile, use the 3/6 family instead, keeping whatever simple/special tier otherwise applies. This only applies to Float Dibond/Kapa items, not Box or Canvas profiles."
   },
+  "box_profile_size_default": {
+    "bands": [
+      {"max_long_side_cm": 100, "family": "1.5/4"},
+      {"max_long_side_cm": 200, "family": "2.5/4.67"},
+      {"max_long_side_cm": null, "family": "3/6"}
+    ],
+    "notes": "Confirmed by the studio owner (2026-08-06): for a plain 'Box ' profile (row23_profile_preset, excluding 'Box Ready Wood ...'), to give an initial price when the customer hasn't named a specific wood/profile themselves, pick the family by the long side (max(height_cm, width_cm)): <=100cm -> 1.5/4, <=200cm -> 2.5/4.67, >200cm (over 2 meters) -> 3/6. This replaces every box preset's own hardcoded default of 1.5/4 regardless of size, which was wrong for anything large. Keeps whatever simple/special tier otherwise applies (from wood_species/paint_method) — this only changes the face/depth family, same relationship as float_profile_size_aliases. Free-text/quick-quote path only, same as the other wood/paint defaults — a structured/API caller that sets row23_profile_preset explicitly gets exactly what they asked for."
+  },
   "preset_hints": {
     "box_drawing": {
-      "trigger_terms": ["work on paper", "paper artwork", "drawing", "original on paper", "watercolor", "watercolour"],
-      "notes": "When a customer wants a box frame for an existing 'work on paper' (a drawing, watercolor, or similar paper-based original — not a new print job), use the 'box_drawing' preset (labeled '+ Drawing' in the UI), not the base 'box' preset. It uses a paper-safe hinging method instead of a Kapaline-backed print mount, which is what a work on paper actually needs."
+      "trigger_terms": ["work on paper", "paper artwork", "drawing", "original on paper", "watercolor", "watercolour",
+                         "fabric", "textile", "cloth", "woven", "tapestry", "weaving"],
+      "notes": "When a customer wants a box frame for an existing original that isn't being printed here — a drawing/watercolor/paper artwork, but also fabric, textile, or woven pieces (confirmed by the studio owner 2026-08-06: 'drawing' covers more than literal paper) — use the 'box_drawing' preset (labeled '+ Drawing' in the UI), not the base 'box' preset. It hinges the piece to the backing instead of using a Kapaline-backed print mount, which any of these delicate original materials need, not just paper specifically."
     }
   },
   "box_back_frame_rule": {
@@ -43,5 +52,18 @@
     "default_item": "Back Frame Small",
     "perimeter_threshold_m": 4.7,
     "notes": "Any Box-family profile (row23_profile_preset starting with 'Box ', excluding 'Box Ready Wood ...') needs a small back-frame brace for structural support once the frame's perimeter — (height_cm+width_cm)*2/100 — exceeds 4.7 meters. Add row14_back_frame_small ('Back Frame Small') automatically in that case, unless the caller already specified that slot themselves. Always on — not gated behind free-text-only interpretation, since it's a structural fact, not a language ambiguity."
+  },
+  "box_glyph_rule": {
+    "wood_slot_key": "row19_wood_glyph",
+    "wood_item": "Wood Glyph",
+    "paper_slot_key": "row20_paper_glyph",
+    "paper_item": "Paper Glyph",
+    "passpartout_glyph_slot_key": "row21_passpartout_glyph",
+    "passpartout_glyph_item": "Passpartout Glyph",
+    "passpartout_slot_key": "row26_passpartout",
+    "print_slot_key": "row11_paper",
+    "drawing_slot_key": "row28_drawing",
+    "small_glyph_max_long_side_cm": 100,
+    "notes": "Confirmed by the studio owner (2026-08-06, superseding the earlier box_wood_glyph_rule): every Box-family profile (row23_profile_preset starting with 'Box ', excluding 'Box Ready Wood ...') carries exactly one joinery/mounting labor line, decided in this priority order: (1) if there's an actual passpartout (row26_passpartout), no glyph at all — it replaces that step; (2) else if it's a drawing/paper-artwork job (row28_drawing present, i.e. the box_drawing preset / an existing work on paper — also called 'מסגור לעבודת נייר') — Passpartout Glyph if the long side (max(height_cm, width_cm)) is <= 100cm, otherwise Wood Glyph; (3) else if there's a print (row11_paper present) — Paper Glyph if long side <= 100cm, otherwise Wood Glyph; (4) else (an existing, non-paper piece just being framed) — Wood Glyph, any size. Drawing and print are mutually exclusive in practice (box_drawing never includes row11_paper). None of the presets encode this correctly on their own (box_mount_print always bakes in Wood Glyph regardless of size; box_drawing bakes in nothing; Paper Glyph and Passpartout Glyph were never used by any preset before this rule) — so this rule recomputes the glyph slot unconditionally, replacing whatever a preset or prior component list had, rather than only filling a gap. Structural fact about box construction, not a language-interpretation nicety."
   }
 }

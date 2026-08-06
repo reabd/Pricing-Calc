@@ -24,6 +24,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 
 import business_rules
 import llm_parser
+import quote_reply
 from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, price_job
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -125,9 +126,12 @@ def price_parsed_lines(parsed_lines, apply_business_rules=False):
         components = catalog.resolve_components_dict(
             parsed.get("preset_key"), parsed.get("components", [])
         )
-        # Structural rule, not a language-interpretation nicety — applies
+        # Structural rules, not language-interpretation niceties — apply
         # unconditionally to every caller, structured or free-text.
         components = business_rules.apply_box_back_frame_rule(
+            components, parsed["height_cm"], parsed["width_cm"]
+        )
+        components = business_rules.apply_box_glyph_rule(
             components, parsed["height_cm"], parsed["width_cm"]
         )
         if apply_business_rules:
@@ -136,6 +140,8 @@ def price_parsed_lines(parsed_lines, apply_business_rules=False):
                 wood_species=parsed.get("wood_species"),
                 paint_method=parsed.get("paint_method"),
                 float_profile_size=parsed.get("float_profile_size"),
+                height_cm=parsed["height_cm"],
+                width_cm=parsed["width_cm"],
             )
             if error:
                 return {"clarification_needed": error}
@@ -232,6 +238,31 @@ def api_price_update_apply():
         return jsonify({"error": "No diffs to apply"}), 400
     llm_parser.apply_price_changes(catalog, diffs)
     return jsonify({"status": "applied", "count": len(diffs)})
+
+
+@app.route("/api/quote/reply-draft", methods=["POST"])
+def api_quote_reply_draft():
+    """
+    Takes the `quotes` list already returned by /api/quote/freetext or
+    /api/quote/structured (no re-pricing here) and formats it into
+    client-facing reply text matching the studio's observed email style.
+    Text only — never sends or creates an actual email/draft.
+    """
+    data = request.json or {}
+    quotes = data.get("quotes", [])
+    if not quotes:
+        return jsonify({"error": "No quotes to draft a reply for."}), 400
+
+    text = quote_reply.draft_reply(
+        quotes,
+        client_first_name=(data.get("client_first_name") or "").strip() or None,
+        vat_included=bool(data.get("vat_included", False)),
+        signer_name=(data.get("signer_name") or "").strip() or None,
+        language=data.get("language", "he"),
+        recipient_form=data.get("recipient_form", "m"),
+        include_order_system_link=bool(data.get("include_order_system_link", False)),
+    )
+    return jsonify({"text": text})
 
 
 @app.route("/api/price-list")

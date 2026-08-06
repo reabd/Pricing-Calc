@@ -57,16 +57,37 @@ def _swap_float_family(item_name, family):
     return f"{prefix}{family}{suffix or ''}"
 
 
+# Deliberately just "Box " (not "Box Ready Wood ") — matches naturally
+# fails against "Box Ready Wood 1.5/3 ..." since "Ready" isn't a number,
+# so no explicit exclusion is needed here (same as the tier-swap regex).
+BOX_FAMILY_RE = re.compile(r"^(Box )([\d.]+/[\d.]+)(\s.*)?$", re.I)
+
+
+def _swap_box_family(item_name, family):
+    m = BOX_FAMILY_RE.match(item_name)
+    if not m:
+        return item_name
+    prefix, _old_family, suffix = m.groups()
+    return f"{prefix}{family}{suffix or ''}"
+
+
+def _box_default_family(long_side_cm):
+    for band in studio_knowledge()["box_profile_size_default"]["bands"]:
+        if band["max_long_side_cm"] is None or long_side_cm <= band["max_long_side_cm"]:
+            return band["family"]
+    return None
+
+
 def apply_wood_paint_rules(catalog, components, wood_species=None, paint_method=None,
-                            float_profile_size=None):
+                            float_profile_size=None, height_cm=None, width_cm=None):
     """
     `components` is a {slot_key: {"item_name":..., "quantity":...}} dict,
     already merged from a preset + explicit overrides (see
     PricingCatalog.resolve_components_dict). Mutates and returns it,
-    applying the wood-species/paint-tier and float-profile-size business
-    rules. Returns (components, error_message) — error_message is set (and
-    components unchanged) if wood_species and paint_method contradict
-    each other.
+    applying the wood-species/paint-tier, float-profile-size, and
+    box-profile-size business rules. Returns (components, error_message) —
+    error_message is set (and components unchanged) if wood_species and
+    paint_method contradict each other.
     """
     knowledge = studio_knowledge()
     paint_rules = knowledge["paint_wood_constraints"]
@@ -99,6 +120,13 @@ def apply_wood_paint_rules(catalog, components, wood_species=None, paint_method=
             family = float_size_aliases.get(float_profile_size.strip().lower())
             if family:
                 swapped = _swap_float_family(current_item, family)
+                if swapped in catalog.get_slot(PROFILE_SLOT_KEY)["items"]:
+                    current_item = swapped
+
+        if height_cm is not None and width_cm is not None:
+            family = _box_default_family(max(height_cm, width_cm))
+            if family:
+                swapped = _swap_box_family(current_item, family)
                 if swapped in catalog.get_slot(PROFILE_SLOT_KEY)["items"]:
                     current_item = swapped
                 # else: not a Float Dibond/Kapa item — leave as-is.
@@ -134,5 +162,68 @@ def apply_box_back_frame_rule(components, height_cm, width_cm):
     perimeter_m = (height_cm + width_cm) * 2 / 100
     if perimeter_m > rule["perimeter_threshold_m"]:
         components[slot_key] = {"item_name": rule["default_item"], "quantity": 1.0}
+
+    return components
+
+
+def apply_box_glyph_rule(components, height_cm, width_cm):
+    """
+    Every Box-family profile carries exactly one joinery/mounting labor
+    line — Wood Glyph, Paper Glyph, or Passpartout Glyph — decided in this
+    priority order:
+      1. Actual passpartout present -> no glyph at all (replaces that step).
+      2. Drawing/paper-artwork job (row28_drawing, e.g. box_drawing preset
+         — an existing work on paper) -> Passpartout Glyph if the long
+         side is <= 100cm, else Wood Glyph.
+      3. Print included -> Paper Glyph if the long side is <= 100cm, else
+         Wood Glyph (large printed pieces need the same joinery as an
+         unprinted frame).
+      4. Otherwise (existing non-paper piece just being framed) -> Wood
+         Glyph, any size.
+    Drawing and print are mutually exclusive in practice.
+
+    None of the presets encode this correctly on their own (box_mount_print
+    always bakes in Wood Glyph regardless of size; box_drawing bakes in no
+    glyph at all; Paper Glyph and Passpartout Glyph were never used by any
+    preset before this rule) — so this recomputes the glyph slot
+    unconditionally, replacing whatever a preset or prior component list
+    had, rather than only filling a gap. Same treatment as
+    apply_box_back_frame_rule: a structural fact about box construction,
+    not a free-text interpretation choice.
+    """
+    rule = studio_knowledge()["box_glyph_rule"]
+    wood_slot = rule["wood_slot_key"]
+    paper_slot = rule["paper_slot_key"]
+    passpartout_glyph_slot = rule["passpartout_glyph_slot_key"]
+
+    if PROFILE_SLOT_KEY not in components:
+        return components
+
+    profile_item = components[PROFILE_SLOT_KEY]["item_name"]
+    if not profile_item.startswith("Box ") or profile_item.startswith("Box Ready Wood"):
+        return components
+
+    components.pop(wood_slot, None)
+    components.pop(paper_slot, None)
+    components.pop(passpartout_glyph_slot, None)
+
+    if rule["passpartout_slot_key"] in components:
+        return components
+
+    long_side_cm = max(height_cm, width_cm)
+    small_enough = long_side_cm <= rule["small_glyph_max_long_side_cm"]
+
+    if rule["drawing_slot_key"] in components:
+        if small_enough:
+            components[passpartout_glyph_slot] = {"item_name": rule["passpartout_glyph_item"], "quantity": 1.0}
+        else:
+            components[wood_slot] = {"item_name": rule["wood_item"], "quantity": 1.0}
+    elif rule["print_slot_key"] in components:
+        if small_enough:
+            components[paper_slot] = {"item_name": rule["paper_item"], "quantity": 1.0}
+        else:
+            components[wood_slot] = {"item_name": rule["wood_item"], "quantity": 1.0}
+    else:
+        components[wood_slot] = {"item_name": rule["wood_item"], "quantity": 1.0}
 
     return components
