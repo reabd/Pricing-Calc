@@ -78,16 +78,47 @@ def _box_default_family(long_side_cm):
     return None
 
 
+def apply_box_profile_size_default(catalog, components, height_cm, width_cm, explicit_slots=frozenset()):
+    """
+    Default the box profile FAMILY (face/depth) by size — see
+    studio_knowledge.json's box_profile_size_default — unless the caller
+    explicitly chose row23_profile_preset themselves (a structured
+    override, or a Quick Quote UI dropdown re-selection re-sent as an
+    explicit component): `explicit_slots` is the set of slot_keys the
+    caller actually specified, checked before this rule touches anything,
+    so a deliberate profile pick never gets silently snapped back to the
+    size default.
+
+    Applied unconditionally otherwise — structured or free-text — same as
+    apply_box_back_frame_rule/apply_box_glyph_rule. This deliberately does
+    NOT live inside apply_wood_paint_rules: that function only runs on the
+    free-text path (apply_business_rules=True), but the Quick Quote UI's
+    initial calculation for a preset card goes through the structured
+    endpoint directly and would never see a family default at all if this
+    were gated the same way.
+    """
+    if PROFILE_SLOT_KEY in explicit_slots or PROFILE_SLOT_KEY not in components:
+        return components
+
+    current_item = components[PROFILE_SLOT_KEY]["item_name"]
+    family = _box_default_family(max(height_cm, width_cm))
+    if family:
+        swapped = _swap_box_family(current_item, family)
+        if swapped in catalog.get_slot(PROFILE_SLOT_KEY)["items"]:
+            components[PROFILE_SLOT_KEY]["item_name"] = swapped
+    return components
+
+
 def apply_wood_paint_rules(catalog, components, wood_species=None, paint_method=None,
-                            float_profile_size=None, height_cm=None, width_cm=None):
+                            float_profile_size=None):
     """
     `components` is a {slot_key: {"item_name":..., "quantity":...}} dict,
     already merged from a preset + explicit overrides (see
     PricingCatalog.resolve_components_dict). Mutates and returns it,
-    applying the wood-species/paint-tier, float-profile-size, and
-    box-profile-size business rules. Returns (components, error_message) —
-    error_message is set (and components unchanged) if wood_species and
-    paint_method contradict each other.
+    applying the wood-species/paint-tier and float-profile-size business
+    rules. Returns (components, error_message) — error_message is set (and
+    components unchanged) if wood_species and paint_method contradict
+    each other.
     """
     knowledge = studio_knowledge()
     paint_rules = knowledge["paint_wood_constraints"]
@@ -122,14 +153,6 @@ def apply_wood_paint_rules(catalog, components, wood_species=None, paint_method=
                 swapped = _swap_float_family(current_item, family)
                 if swapped in catalog.get_slot(PROFILE_SLOT_KEY)["items"]:
                     current_item = swapped
-
-        if height_cm is not None and width_cm is not None:
-            family = _box_default_family(max(height_cm, width_cm))
-            if family:
-                swapped = _swap_box_family(current_item, family)
-                if swapped in catalog.get_slot(PROFILE_SLOT_KEY)["items"]:
-                    current_item = swapped
-                # else: not a Float Dibond/Kapa item — leave as-is.
 
         components[PROFILE_SLOT_KEY]["item_name"] = current_item
 

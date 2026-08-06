@@ -134,14 +134,16 @@ def price_parsed_lines(parsed_lines, apply_business_rules=False):
         components = business_rules.apply_box_glyph_rule(
             components, parsed["height_cm"], parsed["width_cm"]
         )
+        explicit_slots = {c["slot_key"] for c in parsed.get("components", [])}
+        components = business_rules.apply_box_profile_size_default(
+            catalog, components, parsed["height_cm"], parsed["width_cm"], explicit_slots
+        )
         if apply_business_rules:
             components, error = business_rules.apply_wood_paint_rules(
                 catalog, components,
                 wood_species=parsed.get("wood_species"),
                 paint_method=parsed.get("paint_method"),
                 float_profile_size=parsed.get("float_profile_size"),
-                height_cm=parsed["height_cm"],
-                width_cm=parsed["width_cm"],
             )
             if error:
                 return {"clarification_needed": error}
