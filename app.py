@@ -24,7 +24,6 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 
 import business_rules
 import llm_parser
-import quote_reply
 from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, price_job
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -240,31 +239,6 @@ def api_price_update_apply():
         return jsonify({"error": "No diffs to apply"}), 400
     llm_parser.apply_price_changes(catalog, diffs)
     return jsonify({"status": "applied", "count": len(diffs)})
-
-
-@app.route("/api/quote/reply-draft", methods=["POST"])
-def api_quote_reply_draft():
-    """
-    Takes the `quotes` list already returned by /api/quote/freetext or
-    /api/quote/structured (no re-pricing here) and formats it into
-    client-facing reply text matching the studio's observed email style.
-    Text only — never sends or creates an actual email/draft.
-    """
-    data = request.json or {}
-    quotes = data.get("quotes", [])
-    if not quotes:
-        return jsonify({"error": "No quotes to draft a reply for."}), 400
-
-    text = quote_reply.draft_reply(
-        quotes,
-        client_first_name=(data.get("client_first_name") or "").strip() or None,
-        vat_included=bool(data.get("vat_included", False)),
-        signer_name=(data.get("signer_name") or "").strip() or None,
-        language=data.get("language", "he"),
-        recipient_form=data.get("recipient_form", "m"),
-        include_order_system_link=bool(data.get("include_order_system_link", False)),
-    )
-    return jsonify({"text": text})
 
 
 @app.route("/api/price-list")

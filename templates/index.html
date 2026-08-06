@@ -242,18 +242,6 @@
   footer.excluded { margin-top: 40px; font-size: 0.8rem; color: var(--ink-muted); }
   footer.excluded ul { margin: 8px 0 0; padding-inline-start: 20px; }
 
-  .reply-draft { margin-top: 18px; border-top: 1px dashed var(--line); padding-top: 16px; }
-  .reply-draft .reply-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 12px; }
-  .reply-draft .field input, .reply-draft .field select {
-    font-family: inherit; font-size: 0.88rem; padding: 8px 10px; border-radius: var(--radius);
-    border: 1px solid var(--line); background: var(--paper); color: var(--ink);
-  }
-  .reply-draft textarea {
-    min-height: 160px; font-size: 0.88rem; white-space: pre-wrap;
-  }
-  .reply-draft .reply-actions { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
-  .reply-draft .copy-ok { color: var(--ink-muted); font-size: 0.82rem; }
-
   .spinner {
     display: inline-block; width: 13px; height: 13px; border: 2px solid var(--line);
     border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-inline-end: 7px;
@@ -296,7 +284,6 @@
       </div>
       <div id="calc-status"></div>
       <div id="calc-result"></div>
-      <div id="reply-draft-quick"></div>
     </div>
   </section>
 
@@ -314,7 +301,6 @@
       <div style="margin-top:10px;"><button class="action" id="quote-submit">Get Quote</button></div>
       <div id="quote-status"></div>
       <div id="quote-results"></div>
-      <div id="reply-draft-freetext"></div>
     </div>
 
     <div class="tool-panel" id="panel-update">
@@ -346,94 +332,6 @@ document.getElementById('excluded-list').innerHTML =
   EXCLUDED.map(x => `<li>${x}</li>`).join('');
 
 function fmt(n) { return new Intl.NumberFormat('en-US', {maximumFractionDigits:0}).format(Math.round(n)); }
-
-/* ---------------- Draft client reply ---------------- */
-// Renders a small form (client name / language / VAT toggle) that calls
-// /api/quote/reply-draft to format an already-computed quote into text
-// matching the studio's real email style. Never sends anything — output
-// is a plain textarea the staff member copies into their own email client.
-function renderReplyDraftWidget(containerId, quotes) {
-  const el = document.getElementById(containerId);
-  el.innerHTML = `
-    <div class="reply-draft">
-      <p class="eyebrow">Draft client reply</p>
-      <div class="reply-controls">
-        <div class="field"><label>Client first name</label><input type="text" class="rd-name" placeholder="optional"></div>
-        <div class="field"><label>Language</label>
-          <select class="rd-lang"><option value="he">עברית</option><option value="en">English</option></select>
-        </div>
-        <div class="field rd-form-field"><label>Addressing (Hebrew)</label>
-          <select class="rd-form">
-            <option value="m">זכר יחיד (עדכן אותנו)</option>
-            <option value="f">נקבה יחיד (עדכני אותנו)</option>
-            <option value="plural">רבים (עדכנו אותנו)</option>
-          </select>
-        </div>
-        <label class="quick-checkbox" style="margin-bottom:0;"><input type="checkbox" class="rd-vat"> <span>Quote VAT-included price</span></label>
-        <label class="quick-checkbox rd-order-link-row" style="margin-bottom:0;"><input type="checkbox" class="rd-order-link"> <span>Mention self-service ordering system</span></label>
-        <button class="action ghost rd-generate" type="button">Draft reply</button>
-      </div>
-      <div class="rd-output"></div>
-    </div>`;
-
-  const formFieldEl = el.querySelector('.rd-form-field');
-  const langSelectEl = el.querySelector('.rd-lang');
-  const syncFormFieldVisibility = () => { formFieldEl.style.display = langSelectEl.value === 'he' ? '' : 'none'; };
-  syncFormFieldVisibility();
-  langSelectEl.addEventListener('change', syncFormFieldVisibility);
-
-  // Only relevant when the job includes an actual print (row11_paper) —
-  // framing an existing original means the client has to bring it in
-  // person, so pointing them at the upload system would be wrong.
-  const isPrintJob = quotes.some(q => (q.lines || []).some(l => l.slot_key === 'row11_paper'));
-  const orderLinkRow = el.querySelector('.rd-order-link-row');
-  const orderLinkCheckbox = orderLinkRow.querySelector('.rd-order-link');
-  if (!isPrintJob) {
-    orderLinkCheckbox.checked = false;
-    orderLinkCheckbox.disabled = true;
-    orderLinkRow.title = "No print component in this quote — framing an existing original means the client has to bring it in, not use the upload system.";
-    orderLinkRow.style.opacity = '0.5';
-  }
-
-  el.querySelector('.rd-generate').addEventListener('click', async () => {
-    const nameEl = el.querySelector('.rd-name');
-    const langEl = el.querySelector('.rd-lang');
-    const formEl = el.querySelector('.rd-form');
-    const vatEl = el.querySelector('.rd-vat');
-    const orderLinkEl = el.querySelector('.rd-order-link');
-    const outEl = el.querySelector('.rd-output');
-    outEl.innerHTML = '<span class="spinner"></span>Drafting…';
-    try {
-      const res = await fetch('/api/quote/reply-draft', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          quotes,
-          client_first_name: nameEl.value.trim(),
-          language: langEl.value,
-          recipient_form: formEl.value,
-          vat_included: vatEl.checked,
-          include_order_system_link: orderLinkEl.checked,
-        })
-      });
-      const data = await res.json();
-      if (data.error) { outEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
-      outEl.innerHTML = `
-        <textarea class="rd-text" dir="${langEl.value === 'he' ? 'rtl' : 'ltr'}">${data.text}</textarea>
-        <div class="reply-actions">
-          <button class="action rd-copy" type="button">Copy to clipboard</button>
-          <span class="copy-ok" style="display:none;">Copied.</span>
-        </div>`;
-      outEl.querySelector('.rd-copy').addEventListener('click', async () => {
-        await navigator.clipboard.writeText(outEl.querySelector('.rd-text').value);
-        const ok = outEl.querySelector('.copy-ok');
-        ok.style.display = 'inline';
-        setTimeout(() => { ok.style.display = 'none'; }, 1500);
-      });
-    } catch (e) {
-      outEl.innerHTML = `<div class="error">${e}</div>`;
-    }
-  });
-}
 
 let slotLabels = {};
 let slotItems = {};
@@ -733,7 +631,6 @@ function renderQuickQuoteResult(q) {
   });
 
   updateArtGlassLabel(q.lines);
-  renderReplyDraftWidget('reply-draft-quick', [q]);
 }
 
 // Shows what checking the Art Glass 70% box would actually add to the
@@ -872,7 +769,6 @@ document.getElementById('quote-submit').addEventListener('click', async () => {
       html += `<div class="grand-total"><span class="label">Grand total incl. VAT</span><span class="amount">${fmt(data.grand_total_incl_vat)}</span></div>`;
     }
     resultsEl.innerHTML = html;
-    renderReplyDraftWidget('reply-draft-freetext', data.quotes);
   } catch (e) {
     statusEl.innerHTML = '';
     resultsEl.innerHTML = `<div class="error">${e}</div>`;
