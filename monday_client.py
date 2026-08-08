@@ -93,13 +93,25 @@ def _graphql(query, timeout=15):
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
+            raw = resp.read().decode("utf-8")
     except urllib.error.HTTPError as e:
         raise MondayError(f"Monday API HTTP {e.code}: {e.read().decode('utf-8', 'ignore')}") from e
     except urllib.error.URLError as e:
         raise MondayError(f"Could not reach Monday API: {e}") from e
+    except OSError as e:
+        # Covers read timeouts and other lower-level socket failures that
+        # urllib doesn't always wrap in URLError.
+        raise MondayError(f"Monday API request failed: {e}") from e
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise MondayError(f"Monday API returned a non-JSON response: {raw[:300]!r}") from e
+
     if "errors" in payload:
         raise MondayError("; ".join(err.get("message", str(err)) for err in payload["errors"]))
+    if "data" not in payload:
+        raise MondayError(f"Monday API response missing 'data': {payload!r}"[:500])
     return payload["data"]
 
 

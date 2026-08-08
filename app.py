@@ -251,6 +251,13 @@ def api_order_status():
         orders = monday_client.search_orders(query)
     except monday_client.MondayError as e:
         return jsonify({"error": str(e)}), 502
+    except Exception as e:
+        # Belt-and-suspenders: whatever went wrong, the frontend expects
+        # JSON back, not Flask's default HTML error page (which fails to
+        # parse as JSON client-side with a confusing "Unexpected token '<'"
+        # error instead of showing the actual problem).
+        print(f"[order-status] unexpected error for query {query!r}: {e!r}", flush=True)
+        return jsonify({"error": f"Order-status lookup failed unexpectedly: {e}"}), 500
     return jsonify({
         "matches": [
             {**order, "reply_text": monday_client.format_status_reply_he(order)}
