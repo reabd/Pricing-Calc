@@ -52,6 +52,13 @@ COLUMN_IDS = STATUS_COLUMN_IDS + [col_id for col_id, _label, _sched, _done in ST
 # the order's progress and is dropped before display.
 HIDDEN_STEP_STATUSES = {"Not Needed"}
 
+# "Okapics Due" (date_mkn4pghm) is auto-populated on every order, but when
+# there's no real underlying Okapics record it defaults to this exact date
+# rather than being left blank — confirmed by the studio owner (2026-08-08)
+# after it showed up identically on two unrelated orders (25301, 25735),
+# both ~5 months past their real due date. Treated as equivalent to unset.
+OKAPICS_DUE_PLACEHOLDER = "2027-01-01"
+
 STAGE_LABELS_HE = {
     "New Orders": "טרם נכנסה לעבודה בבית המלאכה",
     "At Workshop": "בעבודה בבית המלאכה",
@@ -164,6 +171,13 @@ def _parse_item(item):
     cols = {c["id"]: c["text"] for c in item["column_values"]}
     name = item["name"]
     number_match = NAME_LEADING_NUMBER_RE.match(name.strip())
+
+    workshop_due = cols.get("dup__of_due_date") or None
+    okapics_due = cols.get("date_mkn4pghm") or None
+    if okapics_due == OKAPICS_DUE_PLACEHOLDER:
+        okapics_due = None
+    resolved_due = okapics_due or workshop_due
+
     steps = []
     for status_col, label, sched_col, done_col in STEP_COLUMNS:
         status = cols.get(status_col) or "Not Needed"
@@ -171,11 +185,20 @@ def _parse_item(item):
             date = cols.get(done_col) or cols.get(sched_col)
         else:
             date = cols.get(sched_col)
+            # A pending station's own scheduled date can go stale the same
+            # way Current Due did (see current_due/okapics_due below) —
+            # e.g. the order's real due date moved out to Okapics Due but
+            # this station's date column was never updated to match. A
+            # not-yet-done step can't legitimately be scheduled before the
+            # order's own resolved due date, so treat that as a sign the
+            # station date is stale and show the order's due date instead.
+            # Confirmed by the studio owner (2026-08-08) on order 27187,
+            # whose Closing step still showed its old pre-slip date.
+            if date and resolved_due and date < resolved_due:
+                date = resolved_due
         if status in HIDDEN_STEP_STATUSES:
             continue
         steps.append({"label": label, "status": status, "date": _fmt_date_he(date)})
-    workshop_due = cols.get("dup__of_due_date") or None
-    okapics_due = cols.get("date_mkn4pghm") or None
     return {
         "id": item["id"],
         "name": name,
@@ -187,7 +210,7 @@ def _parse_item(item):
         # a workshop-only order showed a stale Current Due while Okapics
         # Due had the real, later date. See studio_operations_and_
         # communication_notes.md §7 for the full context.
-        "current_due": okapics_due or workshop_due,
+        "current_due": resolved_due,
         "workshop_due": workshop_due,
         "okapics_due": okapics_due,
         "original_due": cols.get("date7") or None,

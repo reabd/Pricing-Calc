@@ -535,16 +535,28 @@ confirmed by direct API inspection.
   workshop-floor detail, **not** meant to be surfaced to clients; a client-facing status only needs
   the group/stage plus the due date.
 - Key columns for status lookups: `dup__of_due_date` ("Current Due" — the workshop's own production
-  due date), `date_mkn4pghm` ("Okapics Due" — a separate deadline tied to the studio's Okapics
-  gallery/artist-consignment tracking, see §3, only populated for that subset of orders), `date7`
-  ("Original Due"), `status4` ("Priority" — includes a `HOLD!` label worth flagging specially), and
-  `dup__of_priority` ("Picked-Up" — values `Picked-Up` / `Still Here`, i.e. whether the client
-  already collected a *Ready* order).
+  due date), `date_mkn4pghm` ("Okapics Due" — appears related to the studio's Okapics gallery/
+  artist-consignment tracking, see §3), `date7` ("Original Due"), `status4` ("Priority" — includes
+  a `HOLD!` label worth flagging specially), and `dup__of_priority` ("Picked-Up" — values
+  `Picked-Up` / `Still Here`, i.e. whether the client already collected a *Ready* order).
   - **Confirmed by the studio owner (2026-08-08):** when both are set, **Okapics Due overrides
     Current Due** for "when will it be ready" purposes — caught when order `27187` showed Current
-    Due `24.07.2026` while Okapics Due (the real commitment) was `09.08.2026`. `monday_client.py`'s
-    `current_due` field is the already-resolved value (Okapics Due if present, else Current Due);
-    `workshop_due` and `okapics_due` are also exposed separately for transparency/debugging.
+    Due `24.07.2026` while Okapics Due (the real commitment) was `09.08.2026`.
+  - **Correction, same day:** Okapics Due is *not* limited to gallery/consignment orders as first
+    assumed — a 15-order sample showed it populated (marked "Auto") on essentially every item. It's
+    also not always reliable: two unrelated orders (`25301`, `25735`) both showed exactly
+    `2027-01-01`, months past their real due date — confirmed by the studio owner as a known
+    "no real data" default/placeholder, not a real commitment, always this exact date. Any other
+    value is treated as real and wins over Current Due; `2027-01-01` is treated as if the field
+    were blank (falls back to Current Due). See `OKAPICS_DUE_PLACEHOLDER` in `monday_client.py`.
+    `monday_client.py`'s `current_due` field is the already-resolved value; `workshop_due` and
+    `okapics_due` are also exposed separately for transparency/debugging.
+  - The same staleness logic applies one level down: a not-yet-`Done` production step's own
+    scheduled date (e.g. "Closing Date") can also lag behind a due-date change that moved to Okapics
+    Due — order `27187`'s Closing step still showed its pre-slip date (`19.07.2026`) despite the
+    order's real due date having moved to `09.08.2026`. `monday_client.py` now treats a pending
+    step's scheduled date as stale (and substitutes the order's resolved due date instead) whenever
+    that step date falls before the order's own resolved `current_due`.
 - The board is large (~7,000 items across the studio's history), so lookups are done via Monday's
   API search (`items_page` with a `contains_text` query on the item name) rather than pulling the
   whole board — a bare 4-6 digit number in the query searches by order number (exact and
