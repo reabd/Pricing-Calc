@@ -24,6 +24,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 
 import business_rules
 import llm_parser
+import monday_client
 from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, price_job
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -239,6 +240,23 @@ def api_price_update_apply():
         return jsonify({"error": "No diffs to apply"}), 400
     llm_parser.apply_price_changes(catalog, diffs)
     return jsonify({"status": "applied", "count": len(diffs)})
+
+
+@app.route("/api/order-status")
+def api_order_status():
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"error": "Enter an order number or client name."}), 400
+    try:
+        orders = monday_client.search_orders(query)
+    except monday_client.MondayError as e:
+        return jsonify({"error": str(e)}), 502
+    return jsonify({
+        "matches": [
+            {**order, "reply_text": monday_client.format_status_reply_he(order)}
+            for order in orders
+        ]
+    })
 
 
 @app.route("/api/price-list")

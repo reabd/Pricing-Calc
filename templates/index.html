@@ -215,6 +215,43 @@
   }
   textarea:focus { border-color: var(--accent); }
 
+  input.text-input {
+    flex: 1; min-width: 0; padding: 12px; border-radius: var(--radius); border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); font-size: 0.92rem; font-family: inherit;
+  }
+  input.text-input:focus { border-color: var(--accent); }
+
+  .order-card {
+    margin-top: 18px; border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px;
+  }
+  .order-card .order-name { font-family: "IBM Plex Mono", monospace; font-size: 0.85rem; color: var(--ink-muted); }
+  .order-card .order-stage {
+    display: inline-block; margin-top: 4px; font-size: 0.78rem; font-weight: 600;
+    padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .order-card .order-reply {
+    margin-top: 10px; padding: 10px 12px; border-radius: var(--radius); background: var(--surface);
+    font-size: 0.95rem; direction: rtl; text-align: right; user-select: all;
+  }
+  .order-card .order-meta { margin-top: 8px; font-size: 0.78rem; color: var(--ink-muted); }
+  .order-steps { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .step-chip {
+    font-size: 0.74rem; padding: 3px 9px; border-radius: 999px; border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .step-chip .step-name { opacity: 0.75; }
+  .step-chip.step-done { background: #dcf5e6; color: #1a7a41; }
+  .step-chip.step-working { background: #ffead1; color: #a05a00; }
+  .step-chip.step-urgent, .step-chip.step-hold { background: #fbdadf; color: #a3132c; }
+  .step-chip.step-pending { background: #ffd7ea; color: #a3134f; }
+  .step-chip.step-planned { background: #dceaff; color: #1a4fa0; }
+  .step-chip.step-notneeded { background: var(--surface); color: var(--ink-muted); border-color: var(--line); }
+  :root[data-theme="dark"] .step-chip.step-done { background: #113a20; color: #7fe0a3; }
+  :root[data-theme="dark"] .step-chip.step-working { background: #4a2f00; color: #ffc266; }
+  :root[data-theme="dark"] .step-chip.step-urgent, :root[data-theme="dark"] .step-chip.step-hold { background: #4a0f18; color: #ff8fa0; }
+  :root[data-theme="dark"] .step-chip.step-pending { background: #4a0f30; color: #ff8fcf; }
+  :root[data-theme="dark"] .step-chip.step-planned { background: #10254a; color: #8fb8ff; }
+
   table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.85rem; }
   th, td { text-align: start; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
   th { color: var(--ink-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -293,6 +330,7 @@
       <button class="tab-btn active" data-tab="freetext">Describe it in your own words</button>
       <button class="tab-btn" data-tab="update">Update prices</button>
       <button class="tab-btn" data-tab="pricelist">Price list</button>
+      <button class="tab-btn" data-tab="orderstatus">Order status</button>
     </div>
 
     <div class="tool-panel active" id="panel-freetext">
@@ -317,6 +355,16 @@
       <div id="presets-content">Loading…</div>
       <h3 style="font-family:'Instrument Serif', serif; font-weight:400; font-size:1.1rem; margin-top:22px;">Components</h3>
       <div id="pricelist-content">Loading…</div>
+    </div>
+
+    <div class="tool-panel" id="panel-orderstatus">
+      <p class="muted">Look up an order by number (e.g. "25301") or by client name — pulls live status from the Workshop board on Monday.com. Shows a ready-to-paste reply for each match.</p>
+      <div style="display:flex; gap:10px;">
+        <input type="text" class="text-input" id="order-status-text" placeholder="Order number or client name...">
+        <button class="action" id="order-status-submit">Check status</button>
+      </div>
+      <div id="order-status-status"></div>
+      <div id="order-status-results"></div>
     </div>
   </section>
 
@@ -773,6 +821,64 @@ document.getElementById('quote-submit').addEventListener('click', async () => {
     statusEl.innerHTML = '';
     resultsEl.innerHTML = `<div class="error">${e}</div>`;
   }
+});
+
+/* ---------------- Order status (Monday.com) ---------------- */
+const STAGE_LABELS_EN = {'New Orders': 'Not started yet', 'At Workshop': 'In production', 'Ready': 'Ready'};
+
+function stepChipClass(status) {
+  switch (status) {
+    case 'Done': return 'step-done';
+    case 'Working': return 'step-working';
+    case 'Urgent': return 'step-urgent';
+    case 'HOLD!': return 'step-hold';
+    case 'Pending Work': return 'step-pending';
+    case 'Planned': return 'step-planned';
+    default: return 'step-notneeded';
+  }
+}
+
+function renderSteps(steps) {
+  return `<div class="order-steps">` + steps.map(s =>
+    `<span class="step-chip ${stepChipClass(s.status)}"><span class="step-name">${s.label}:</span> ${s.status}</span>`
+  ).join('') + `</div>`;
+}
+
+async function runOrderStatusSearch() {
+  const text = document.getElementById('order-status-text').value.trim();
+  const statusEl = document.getElementById('order-status-status');
+  const resultsEl = document.getElementById('order-status-results');
+  resultsEl.innerHTML = '';
+  if (!text) return;
+  statusEl.innerHTML = '<span class="spinner"></span>Checking Monday…';
+  try {
+    const res = await fetch('/api/order-status?q=' + encodeURIComponent(text));
+    const data = await res.json();
+    statusEl.innerHTML = '';
+    if (data.error) { resultsEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
+    if (!data.matches.length) {
+      resultsEl.innerHTML = '<div class="clarify">No matching order found. Double-check the order number, or try the client\'s name.</div>';
+      return;
+    }
+    resultsEl.innerHTML = data.matches.map(o => {
+      const stageLabel = STAGE_LABELS_EN[o.stage] || o.stage;
+      const pickedUp = o.picked_up === 'Picked-Up';
+      return `<div class="order-card">
+        <div class="order-name">${o.name}</div>
+        <span class="order-stage">${stageLabel}${pickedUp ? ' · Picked up' : ''}</span>
+        <div class="order-reply">${o.reply_text}</div>
+        <div class="order-meta">${o.current_due ? 'Current due: ' + o.current_due : 'No due date set'}${o.priority_status === 'HOLD!' ? ' · ⚠ HOLD' : ''}</div>
+        ${renderSteps(o.steps)}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    statusEl.innerHTML = '';
+    resultsEl.innerHTML = `<div class="error">${e}</div>`;
+  }
+}
+document.getElementById('order-status-submit').addEventListener('click', runOrderStatusSearch);
+document.getElementById('order-status-text').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') runOrderStatusSearch();
 });
 
 /* ---------------- Update prices ---------------- */
