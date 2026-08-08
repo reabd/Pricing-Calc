@@ -14,6 +14,7 @@ import os
 import re
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 MONDAY_API_URL = "https://api.monday.com/v2"
 
@@ -22,7 +23,7 @@ MONDAY_API_URL = "https://api.monday.com/v2"
 # display title is renamed), discovered by inspecting the board directly —
 # see the studio_operations_and_communication_notes.md §7 notes for the
 # full column list this board actually has.
-STATUS_COLUMN_IDS = ["dup__of_due_date", "date7", "status4", "dup__of_priority", "text9", "date_mkn4pghm"]
+STATUS_COLUMN_IDS = ["dup__of_due_date", "date7", "status4", "dup__of_priority", "text9", "date_mkn4pghm", "creation_log"]
 
 # Per-production-station columns, in real workshop production order: each
 # entry is (status_col, label, scheduled_date_col, done_date_col). Every
@@ -217,8 +218,24 @@ def _parse_item(item):
         "priority_status": cols.get("status4") or None,
         "picked_up": cols.get("dup__of_priority") or None,
         "customer": cols.get("text9") or None,
+        "days_since_created": _days_since_created(cols.get("creation_log")),
         "steps": steps,
     }
+
+
+def _days_since_created(creation_log_text):
+    """
+    creation_log's text is like "2026-06-25 08:29:05 UTC". Returns whole
+    days elapsed since then (0 for an order created today), or None if the
+    column is missing/unparseable.
+    """
+    if not creation_log_text:
+        return None
+    try:
+        created = datetime.strptime(creation_log_text, "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return (datetime.now(timezone.utc) - created).days
 
 
 def _fmt_date_he(iso_date):
