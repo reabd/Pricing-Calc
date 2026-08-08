@@ -65,7 +65,7 @@ catalog = PricingCatalog(_data_path)
 def require_login():
     if not APP_PASSWORD:
         return None  # no password configured -> auth disabled
-    if request.endpoint in ("login", "static"):
+    if request.endpoint in ("login", "static", "api_monday_webhook"):
         return None
     if not session.get("authenticated"):
         return redirect(url_for("login", next=request.path))
@@ -297,6 +297,48 @@ def api_order_status_flag_rush():
         print(f"[flag-rush] unexpected error: {e!r}", flush=True)
         return jsonify({"error": f"Failed to send notification: {e}"}), 500
     return jsonify({"status": "sent", "to": FRAMING_TEAM_EMAIL})
+
+
+@app.route("/api/monday/webhook", methods=["POST"])
+def api_monday_webhook():
+    """
+    Monday.com calls this whenever one of the 9 production-station status
+    columns changes on the Workshop board (see the 9 webhook subscriptions
+    registered via register_closing_webhooks.py). Not behind the app's
+    login gate — Monday's servers can't complete that login flow — see the
+    exemption in require_login() above.
+
+    Replaces what was originally attempted as 9 native Monday automations:
+    those could only check a single trigger column each ("and only if
+    Closing is Planned"), with no way to also verify the *other* 8 stations
+    were actually done — so they could fire prematurely (e.g. if Mount
+    finished while Carpentry was still in progress). This does the real
+    "are all 9 other stations Done/Not Needed" check in code instead. See
+    studio_operations_and_communication_notes.md §8 for the full story.
+    """
+    payload = request.json or {}
+
+    # Monday's webhook registration handshake: it POSTs a challenge token
+    # once when the subscription is created, and expects the exact same
+    # token echoed back before it'll consider the URL verified.
+    if "challenge" in payload:
+        return jsonify({"challenge": payload["challenge"]})
+
+    event = payload.get("event") or {}
+    item_id = event.get("pulseId")
+    column_id = event.get("columnId")
+    if not item_id or column_id not in monday_client.PREDECESSOR_STEP_COLUMNS:
+        return jsonify({"status": "ignored"})
+
+    try:
+        target, board_id = monday_client.evaluate_closing_transition(item_id)
+        if target:
+            monday_client.set_closing_status(item_id, board_id, target)
+            print(f"[monday-webhook] item {item_id}: Closing -> {target}", flush=True)
+    except monday_client.MondayError as e:
+        print(f"[monday-webhook] error for item {item_id}: {e}", flush=True)
+        return jsonify({"status": "error", "error": str(e)}), 502
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/price-list")

@@ -263,3 +263,85 @@ def format_status_reply_he(order):
     if due:
         return f"ההזמנה שלך (מס' {label}) התקבלה ועדיין לא נכנסה לעבודה, צפויה להיות מוכנה בתאריך {due}."
     return f"ההזמנה שלך (מס' {label}) התקבלה ועדיין לא נכנסה לעבודה בבית המלאכה."
+
+
+# ---------------------------------------------------------------------------
+# Closing-status automation (webhook-driven — see
+# studio_operations_and_communication_notes.md §8 for the full story of why
+# this replaced 9 native Monday automations: those could only check a single
+# trigger column, not "all 9 other stations are Done/Not Needed", so they
+# could fire prematurely. This does the real check in code instead.
+# ---------------------------------------------------------------------------
+
+# The 9 production stations that precede Closing, in pipeline order. Closing
+# itself is STEP_COLUMNS[-1] and is deliberately excluded here — it's the
+# thing being updated, not a precondition for itself.
+PREDECESSOR_STEP_COLUMNS = [col_id for col_id, _label, _sched, _done in STEP_COLUMNS[:-1]]
+CLOSING_STATUS_COLUMN = STEP_COLUMNS[-1][0]  # "dup__of_chromaluxe"
+PRIORITY_COLUMN = "status4"
+
+# Confirmed by the studio owner (2026-08-08, via a real board example,
+# order 27672): a Priority of "Final Date" or "Purple Label" means the
+# order is what the owner calls "Urgent" in plain conversation — there is
+# no literal "Urgent" label on the Priority column itself.
+URGENT_PRIORITY_VALUES = {"Final Date", "Purple Label"}
+
+# A predecessor station only counts as "out of the way" if it's genuinely
+# finished or was never needed for this order — anything else (Working,
+# Pending Work, Urgent, HOLD!, Planned) means Closing must keep waiting.
+STATION_READY_STATUSES = {"Done", "Not Needed"}
+
+
+def evaluate_closing_transition(item_id):
+    """
+    Read-only check: fetches the item's current column state and decides
+    whether Closing should advance from Planned. Returns (target, board_id)
+    where target is "Urgent" / "Pending Work" if the transition should
+    happen now, or None if it shouldn't (Closing isn't Planned, or at least
+    one of the 9 predecessor stations isn't Done/Not Needed yet). Never
+    writes anything — see set_closing_status for the actual mutation.
+    """
+    column_ids = PREDECESSOR_STEP_COLUMNS + [CLOSING_STATUS_COLUMN, PRIORITY_COLUMN]
+    gql = f"""
+    query {{
+      items(ids: [{int(item_id)}]) {{
+        board {{ id }}
+        column_values(ids: {json.dumps(column_ids)}) {{ id text }}
+      }}
+    }}
+    """
+    data = _graphql(gql)
+    items = data.get("items") or []
+    if not items:
+        return None, None
+
+    item = items[0]
+    board_id = item["board"]["id"]
+    cols = {c["id"]: c["text"] for c in item["column_values"]}
+
+    if cols.get(CLOSING_STATUS_COLUMN) != "Planned":
+        return None, board_id
+
+    all_predecessors_ready = all(
+        (cols.get(col_id) or "Not Needed") in STATION_READY_STATUSES
+        for col_id in PREDECESSOR_STEP_COLUMNS
+    )
+    if not all_predecessors_ready:
+        return None, board_id
+
+    priority = cols.get(PRIORITY_COLUMN)
+    target = "Urgent" if priority in URGENT_PRIORITY_VALUES else "Pending Work"
+    return target, board_id
+
+
+def set_closing_status(item_id, board_id, value):
+    """The only function in this module that writes to the board."""
+    gql = f"""
+    mutation {{
+      change_simple_column_value(
+        item_id: {int(item_id)}, board_id: {int(board_id)},
+        column_id: "{CLOSING_STATUS_COLUMN}", value: "{_escape(value)}"
+      ) {{ id }}
+    }}
+    """
+    return _graphql(gql)
