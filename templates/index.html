@@ -234,23 +234,33 @@
     font-size: 0.95rem; direction: rtl; text-align: right; user-select: all;
   }
   .order-card .order-meta { margin-top: 8px; font-size: 0.78rem; color: var(--ink-muted); }
-  .order-steps { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .step-chip {
-    font-size: 0.74rem; padding: 3px 9px; border-radius: 999px; border: 1px solid transparent;
-    white-space: nowrap;
+
+  .steps-timeline {
+    list-style: none; margin: 16px 0 0; padding-inline-start: 18px;
+    border-inline-start: 2px solid var(--line);
   }
-  .step-chip .step-name { opacity: 0.75; }
-  .step-chip.step-done { background: #dcf5e6; color: #1a7a41; }
-  .step-chip.step-working { background: #ffead1; color: #a05a00; }
-  .step-chip.step-urgent, .step-chip.step-hold { background: #fbdadf; color: #a3132c; }
-  .step-chip.step-pending { background: #ffd7ea; color: #a3134f; }
-  .step-chip.step-planned { background: #dceaff; color: #1a4fa0; }
-  .step-chip.step-notneeded { background: var(--surface); color: var(--ink-muted); border-color: var(--line); }
-  :root[data-theme="dark"] .step-chip.step-done { background: #113a20; color: #7fe0a3; }
-  :root[data-theme="dark"] .step-chip.step-working { background: #4a2f00; color: #ffc266; }
-  :root[data-theme="dark"] .step-chip.step-urgent, :root[data-theme="dark"] .step-chip.step-hold { background: #4a0f18; color: #ff8fa0; }
-  :root[data-theme="dark"] .step-chip.step-pending { background: #4a0f30; color: #ff8fcf; }
-  :root[data-theme="dark"] .step-chip.step-planned { background: #10254a; color: #8fb8ff; }
+  .step-row { position: relative; padding-bottom: 14px; padding-inline-start: 16px; }
+  .step-row:last-child { padding-bottom: 0; }
+  .step-row::before {
+    content: ''; position: absolute; inset-inline-start: -25px; top: 3px;
+    width: 10px; height: 10px; border-radius: 50%; background: var(--dot-color, var(--ink-muted));
+    border: 2px solid var(--paper);
+  }
+  .step-row .step-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .step-row .step-title { font-weight: 600; font-size: 0.88rem; }
+  .step-row .step-status { font-size: 0.82rem; color: var(--dot-color, var(--ink-muted)); }
+  .step-row .step-date { font-size: 0.76rem; color: var(--ink-muted); white-space: nowrap; }
+
+  .step-row.status-done { --dot-color: #1a7a41; }
+  .step-row.status-working { --dot-color: #a05a00; }
+  .step-row.status-urgent, .step-row.status-hold { --dot-color: #a3132c; }
+  .step-row.status-pending { --dot-color: #a3134f; }
+  .step-row.status-planned { --dot-color: #1a4fa0; }
+  :root[data-theme="dark"] .step-row.status-done { --dot-color: #7fe0a3; }
+  :root[data-theme="dark"] .step-row.status-working { --dot-color: #ffc266; }
+  :root[data-theme="dark"] .step-row.status-urgent, :root[data-theme="dark"] .step-row.status-hold { --dot-color: #ff8fa0; }
+  :root[data-theme="dark"] .step-row.status-pending { --dot-color: #ff8fcf; }
+  :root[data-theme="dark"] .step-row.status-planned { --dot-color: #8fb8ff; }
 
   table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.85rem; }
   th, td { text-align: start; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
@@ -826,22 +836,28 @@ document.getElementById('quote-submit').addEventListener('click', async () => {
 /* ---------------- Order status (Monday.com) ---------------- */
 const STAGE_LABELS_EN = {'New Orders': 'Not started yet', 'At Workshop': 'In production', 'Ready': 'Ready'};
 
-function stepChipClass(status) {
+function stepStatusClass(status) {
   switch (status) {
-    case 'Done': return 'step-done';
-    case 'Working': return 'step-working';
-    case 'Urgent': return 'step-urgent';
-    case 'HOLD!': return 'step-hold';
-    case 'Pending Work': return 'step-pending';
-    case 'Planned': return 'step-planned';
-    default: return 'step-notneeded';
+    case 'Done': return 'status-done';
+    case 'Working': return 'status-working';
+    case 'Urgent': return 'status-urgent';
+    case 'HOLD!': return 'status-hold';
+    case 'Pending Work': return 'status-pending';
+    case 'Planned': return 'status-planned';
+    default: return '';
   }
 }
 
 function renderSteps(steps) {
-  return `<div class="order-steps">` + steps.map(s =>
-    `<span class="step-chip ${stepChipClass(s.status)}"><span class="step-name">${s.label}:</span> ${s.status}</span>`
-  ).join('') + `</div>`;
+  if (!steps.length) return '';
+  return `<ul class="steps-timeline">` + steps.map(s =>
+    `<li class="step-row ${stepStatusClass(s.status)}">
+      <div class="step-line">
+        <span class="step-title">${s.label} <span class="step-status">— ${s.status}</span></span>
+        ${s.date ? `<span class="step-date">${s.date}</span>` : ''}
+      </div>
+    </li>`
+  ).join('') + `</ul>`;
 }
 
 async function runOrderStatusSearch() {

@@ -24,23 +24,33 @@ MONDAY_API_URL = "https://api.monday.com/v2"
 # full column list this board actually has.
 STATUS_COLUMN_IDS = ["dup__of_due_date", "date7", "status4", "dup__of_priority", "text9"]
 
-# Per-production-station status columns, in real workshop production order.
-# Every order only actually uses a subset of these (the rest read "Not
-# Needed") — e.g. a plain print has no Carpentry/Mount step at all.
+# Per-production-station columns, in real workshop production order: each
+# entry is (status_col, label, scheduled_date_col, done_date_col). Every
+# order only actually uses a subset of these stations — the rest read
+# "Not Needed" and are filtered out before display (see filter_active_steps).
+# Chromaluxe has no separate "DONE date" column on this board, hence None.
 STEP_COLUMNS = [
-    ("foundations3", "Carpentry"),
-    ("dup__of_carpentry", "Paint Brush"),
-    ("dup__of_paint_brush", "Paint Spray"),
-    ("dup__of_paint_spray", "Aluminum"),
-    ("dup__of_aluminum", "Mount"),
-    ("dup__of_glue", "Passepartout"),
-    ("dup__of_passepartout", "Chromaluxe"),
-    ("dup__of_chromaluxe5", "CNC"),
-    ("color_mksy4vp2", "UV Printer"),
-    ("dup__of_chromaluxe", "Closing"),
+    ("foundations3", "Carpentry", "date20", "date_mkzbt7x1"),
+    ("dup__of_carpentry", "Paint Brush", "date9", "date_mkzjm31r"),
+    ("dup__of_paint_brush", "Paint Spray", "date1", "date_mkzjxn3w"),
+    ("dup__of_paint_spray", "Aluminum", "date0", "date_mkzjsfkm"),
+    ("dup__of_aluminum", "Mount", "date4", "date_mkzjdksg"),
+    ("dup__of_glue", "Passepartout", "date6", "date_mkzjvgbh"),
+    ("dup__of_passepartout", "Chromaluxe", "date93", None),
+    ("dup__of_chromaluxe5", "CNC", "dup__of_charomaluxe_date", "date_mkzjdtnq"),
+    ("color_mksy4vp2", "UV Printer", "date_mksyvgc", "date_mkzjj12y"),
+    ("dup__of_chromaluxe", "Closing", "date22", "date_mkzjr9ms"),
 ]
 
-COLUMN_IDS = STATUS_COLUMN_IDS + [col_id for col_id, _label in STEP_COLUMNS]
+STEP_DATE_COLUMN_IDS = [
+    col for _status, _label, sched, done in STEP_COLUMNS for col in (sched, done) if col
+]
+
+COLUMN_IDS = STATUS_COLUMN_IDS + [col_id for col_id, _label, _sched, _done in STEP_COLUMNS] + STEP_DATE_COLUMN_IDS
+
+# A step with this status carries no real information for anyone reading
+# the order's progress and is dropped before display.
+HIDDEN_STEP_STATUSES = {"Not Needed"}
 
 STAGE_LABELS_HE = {
     "New Orders": "טרם נכנסה לעבודה בבית המלאכה",
@@ -142,10 +152,16 @@ def _parse_item(item):
     cols = {c["id"]: c["text"] for c in item["column_values"]}
     name = item["name"]
     number_match = NAME_LEADING_NUMBER_RE.match(name.strip())
-    steps = [
-        {"label": label, "status": cols.get(col_id) or "Not Needed"}
-        for col_id, label in STEP_COLUMNS
-    ]
+    steps = []
+    for status_col, label, sched_col, done_col in STEP_COLUMNS:
+        status = cols.get(status_col) or "Not Needed"
+        if status == "Done" and done_col:
+            date = cols.get(done_col) or cols.get(sched_col)
+        else:
+            date = cols.get(sched_col)
+        if status in HIDDEN_STEP_STATUSES:
+            continue
+        steps.append({"label": label, "status": status, "date": _fmt_date_he(date)})
     return {
         "id": item["id"],
         "name": name,
