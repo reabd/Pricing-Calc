@@ -174,7 +174,12 @@ def fetch_unanswered_inbox_emails(limit=25):
             if _is_already_reviewed(conn, uid):
                 continue
 
-            typ, msg_data = conn.uid("FETCH", uid, "(RFC822 X-GM-THRID)")
+            # BODY.PEEK[] (not RFC822) — a plain RFC822 fetch marks the
+            # message \Seen as a side effect, so a crash partway through a
+            # cycle (as happened once during testing, on an OVERQUOTA
+            # error) would silently and permanently drop that email from
+            # the UNSEEN candidate pool without ever actually reviewing it.
+            typ, msg_data = conn.uid("FETCH", uid, "(BODY.PEEK[] X-GM-THRID)")
             if typ != "OK" or not msg_data or msg_data[0] is None:
                 continue
             raw_headers = msg_data[0][0].decode("utf-8", errors="replace") if isinstance(msg_data[0], tuple) else ""
