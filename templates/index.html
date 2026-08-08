@@ -234,6 +234,13 @@
     font-size: 0.95rem; direction: rtl; text-align: right; user-select: all;
   }
   .order-card .order-meta { margin-top: 8px; font-size: 0.78rem; color: var(--ink-muted); }
+  .rush-flag { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .rush-flag input[type="date"] {
+    padding: 8px 10px; border-radius: var(--radius); border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); font-family: inherit; font-size: 0.85rem;
+  }
+  .rush-flag button.action { padding: 8px 14px; font-size: 0.85rem; }
+  .rush-flag .rush-status { font-size: 0.8rem; }
 
   .steps-timeline {
     list-style: none; margin: 16px 0 0; padding-inline-start: 18px;
@@ -885,6 +892,11 @@ async function runOrderStatusSearch() {
         <div class="order-reply">${o.reply_text}</div>
         <div class="order-meta">${o.current_due ? 'Current due: ' + o.current_due : 'No due date set'}${o.priority_status === 'HOLD!' ? ' · ⚠ HOLD' : ''}</div>
         ${renderSteps(o.steps)}
+        ${pickedUp ? '' : `<div class="rush-flag" data-order-name="${o.name}" data-stage="${stageLabel}" data-due="${o.current_due || ''}">
+          <input type="date" class="rush-date-input">
+          <button class="action ghost rush-flag-btn">Flag as rush → notify framing</button>
+          <span class="rush-status"></span>
+        </div>`}
       </div>`;
     }).join('');
   } catch (e) {
@@ -895,6 +907,41 @@ async function runOrderStatusSearch() {
 document.getElementById('order-status-submit').addEventListener('click', runOrderStatusSearch);
 document.getElementById('order-status-text').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') runOrderStatusSearch();
+});
+
+document.getElementById('order-status-results').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.rush-flag-btn');
+  if (!btn) return;
+  const wrap = btn.closest('.rush-flag');
+  const dateInput = wrap.querySelector('.rush-date-input');
+  const statusEl = wrap.querySelector('.rush-status');
+  if (!dateInput.value) {
+    statusEl.textContent = 'Pick a requested date first.';
+    return;
+  }
+  btn.disabled = true;
+  statusEl.textContent = 'Sending…';
+  try {
+    const res = await fetch('/api/order-status/flag-rush', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        order_name: wrap.dataset.orderName,
+        stage: wrap.dataset.stage,
+        current_due: wrap.dataset.due,
+        requested_date: dateInput.value,
+      })
+    });
+    const data = await res.json();
+    if (data.error) {
+      statusEl.textContent = 'Failed: ' + data.error;
+      btn.disabled = false;
+    } else {
+      statusEl.textContent = '✓ Sent to ' + data.to;
+    }
+  } catch (err) {
+    statusEl.textContent = 'Failed: ' + err;
+    btn.disabled = false;
+  }
 });
 
 /* ---------------- Update prices ---------------- */

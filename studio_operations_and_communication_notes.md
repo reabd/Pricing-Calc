@@ -120,6 +120,18 @@ Two parallel numbering systems were observed:
   their own follow-up email, distinct from the quote email — invoicing is a separate step, always
   triggered after the client confirms the quote ("שלחנו חשבונית לתשלום במייל נפרד" — "we sent the
   invoice for payment in a separate email" is a stock phrase).
+- **How a client can identify their order when asking about status (confirmed by the studio owner,
+  2026-08-08)** — depends entirely on which track the order came in on:
+  - **Online orders**: the client gets a confirmation email with the order number (the W2P email
+    above), so it's fine to ask them for that number.
+  - **In-studio orders**: currently, entering an order at the studio does **not** send the client
+    any email with an order number — so asking "what's your order number" is a dead end for these
+    clients. Ask for their **full name** (the name the order is under) instead, or the date they
+    came in, and look it up by name.
+  - **The back-of-piece sticker** (see below) only exists once a piece is finished/framed and
+    physically in hand — it's only useful for a *repeat* client referencing a past, already-received
+    order, never for "when will my current order be ready," since that order hasn't been produced
+    (and stickered) yet.
 
 ### Order lifecycle (as observed across threads)
 1. Client inquiry (email, sometimes referencing a prior in-person meeting/phone call) →
@@ -563,6 +575,12 @@ confirmed by direct API inspection.
   unambiguous); otherwise it falls back to a name search, which for a repeat client can surface
   several historical orders (results are sorted so not-yet-picked-up orders show first, since
   that's almost always what "is it ready" is actually asking about).
+  - **When drafting an actual client-facing reply to "when will my order be ready" (studio owner,
+    2026-08-08): ignore Picked-Up matches entirely** — don't mention them, don't reference "you also
+    have an older order that was already collected," nothing. Only the active
+    (not-yet-picked-up) order(s) belong in the reply. This is stricter than the UI's sort-order
+    (which still *shows* picked-up orders, just last) — the UI can display full history for staff
+    browsing, but a reply written to the client should read as if the picked-up ones don't exist.
 
 ### What was built
 - [`monday_client.py`](monday_client.py) — read-only GraphQL wrapper (`search_orders(query)`,
@@ -580,6 +598,24 @@ confirmed by direct API inspection.
   instead of all 10 stations.
 - Credentials: `MONDAY_API_TOKEN` and `MONDAY_BOARD_ID` live in the app's local `.env` (gitignored,
   same pattern as `ANTHROPIC_API_KEY`) — never committed, never hard-coded.
+- **"Flag as rush" auto-email** ([`email_sender.py`](email_sender.py), `/api/order-status/flag-rush`
+  in `app.py`) — confirmed by the studio owner (2026-08-08): when a client asks to expedite an
+  order, staff shouldn't promise a new date themselves (workshop capacity isn't something this tool
+  can see) — instead pick the requested date in the "Order status" card and click the button, which
+  sends a real, immediate email to `framing@theprinthouse.co.il` (overridable via `FRAMING_TEAM_EMAIL`)
+  with the order number, stage, current due date, and requested date, asking the team to check
+  feasibility and update Monday if approved. Not shown on already-picked-up orders.
+  - **This is a real, unconfirmed send via SMTP** (`smtplib`), not a draft — deliberately different
+    from the Gmail MCP draft tool used elsewhere in this session, which only creates drafts for a
+    human to review/send and turned out to be connected to `info@reastudio.co.il` (a different,
+    gallery/bookkeeping-focused mailbox — see existing note on this address), not the studio's main
+    inbox. The MCP Gmail tool available in this session has **no send capability at all**, only
+    draft/read/label — so a true one-click automatic send could only be built via direct SMTP from
+    the app itself, which is what this is.
+  - Requires `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` in `.env` (template in
+    `.env.example`) — **not yet configured as of 2026-08-08**; the studio owner said they'd send
+    an App Password to set this up. Until then, the button fails gracefully with a clear inline
+    error rather than silently doing nothing or crashing.
 
 ### Known gaps / things to revisit
 - The client-facing reply text only distinguishes stage + due date + Picked-Up + HOLD; it doesn't

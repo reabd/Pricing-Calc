@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
 import business_rules
+import email_sender
 import llm_parser
 import monday_client
 from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, price_job
@@ -264,6 +265,38 @@ def api_order_status():
             for order in orders
         ]
     })
+
+
+FRAMING_TEAM_EMAIL = os.environ.get("FRAMING_TEAM_EMAIL", "framing@theprinthouse.co.il")
+
+
+@app.route("/api/order-status/flag-rush", methods=["POST"])
+def api_order_status_flag_rush():
+    data = request.json or {}
+    order_name = (data.get("order_name") or "").strip()
+    requested_date = (data.get("requested_date") or "").strip()
+    if not order_name or not requested_date:
+        return jsonify({"error": "Order name and requested date are required."}), 400
+
+    subject = f"בקשת זירוז - הזמנה {order_name} - עד {requested_date}"
+    body = (
+        f"היי,\n\n"
+        f"לקוח/ה ביקש/ה לזרז את ההזמנה הבאה:\n\n"
+        f"הזמנה: {order_name}\n"
+        f"שלב נוכחי: {data.get('stage') or '—'}\n"
+        f"תאריך יעד נוכחי: {data.get('current_due') or '—'}\n"
+        f"תאריך מבוקש: {requested_date}\n\n"
+        f"אפשר לבדוק אם זה ריאלי ולעדכן בהתאם (כולל עדכון התאריך ב-Monday אם מאושר)?\n\n"
+        f"תודה,\nנשלח אוטומטית מכלי בדיקת סטטוס הזמנות"
+    )
+    try:
+        email_sender.send_email(FRAMING_TEAM_EMAIL, subject, body)
+    except email_sender.EmailError as e:
+        return jsonify({"error": str(e)}), 502
+    except Exception as e:
+        print(f"[flag-rush] unexpected error: {e!r}", flush=True)
+        return jsonify({"error": f"Failed to send notification: {e}"}), 500
+    return jsonify({"status": "sent", "to": FRAMING_TEAM_EMAIL})
 
 
 @app.route("/api/price-list")
