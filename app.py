@@ -14,6 +14,7 @@ password before use. If it's not set at all, the app stays open with no
 login — that's the default for local/trusted use.
 """
 import os
+import re
 import secrets
 import shutil
 import threading
@@ -30,6 +31,7 @@ import email_sender
 import imap_client
 import llm_parser
 import monday_client
+import quote_reply
 from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, price_job
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -388,6 +390,42 @@ def api_price_list_update_item():
     return jsonify({"status": "saved"})
 
 
+def _try_price_quote(candidate):
+    """
+    Attempts to resolve a poller candidate as a price-quote request using
+    the same deterministic pipeline as the interactive freetext-quote
+    endpoint (llm_parser.parse_quote_request + price_job) — a real
+    computed price, not a guess. Returns (reply_subject, reply_body,
+    grand_total_nis) on a confident match. Returns None if llm_parser
+    couldn't confidently match the request to the catalog (ambiguous
+    wording, missing size, etc.) — that case falls through to the general
+    email_ai judgment in the caller, which already treats "needs a price
+    quote" as should_draft=false, so an unparseable quote request still
+    gets skipped rather than guessed at.
+    """
+    text = f"{candidate['subject']}\n\n{candidate['body']}"
+    try:
+        parsed = llm_parser.parse_quote_request(text, catalog)
+    except RuntimeError:
+        return None
+    if parsed.get("clarification_needed") or not parsed.get("lines"):
+        return None
+    try:
+        result = price_parsed_lines(parsed["lines"], apply_business_rules=True)
+    except PricingError:
+        return None
+
+    quotes = result["quotes"]
+    language = "he" if re.search("[֐-׿]", text) else "en"
+    first_name = (candidate.get("from_name") or "").strip().split(" ")[0] or None
+
+    reply_body = quote_reply.draft_reply(
+        quotes, client_first_name=first_name, vat_included=False, language=language,
+    )
+    grand_total = sum(q["quantity_price"] for q in quotes)
+    return f"Re: {candidate['subject']}", reply_body, grand_total
+
+
 def _run_email_poller(interval_seconds):
     """
     Background loop: checks the inbox, asks Claude to decide/draft for each
@@ -409,18 +447,30 @@ def _run_email_poller(interval_seconds):
             candidates = imap_client.fetch_unanswered_inbox_emails()
             for candidate in candidates:
                 try:
-                    decision = email_ai.decide_and_draft_reply(candidate)
-                    if decision.get("should_draft") and decision.get("reply_body"):
-                        imap_client.append_draft_reply(
-                            candidate,
-                            decision.get("reply_subject") or f"Re: {candidate['subject']}",
-                            decision["reply_body"],
-                        )
-                        print(f"[email-poller] drafted reply to {candidate['from_email']!r} "
-                              f"({candidate['subject']!r}): {decision.get('reason')}", flush=True)
+                    price_quote = _try_price_quote(candidate)
+                    if price_quote:
+                        reply_subject, reply_body, grand_total = price_quote
+                        imap_client.append_draft_reply(candidate, reply_subject, reply_body)
+                        labels = [imap_client.PRICE_QUOTE_LABEL]
+                        if grand_total > 4000:
+                            labels.append(imap_client.PRICE_QUOTE_OVER_4000_LABEL)
+                        imap_client.apply_labels(candidate["uid"], labels)
+                        print(f"[email-poller] drafted price quote for {candidate['from_email']!r} "
+                              f"({candidate['subject']!r}): {grand_total:.0f} NIS, labels={labels}",
+                              flush=True)
                     else:
-                        print(f"[email-poller] skipped {candidate['from_email']!r} "
-                              f"({candidate['subject']!r}): {decision.get('reason')}", flush=True)
+                        decision = email_ai.decide_and_draft_reply(candidate)
+                        if decision.get("should_draft") and decision.get("reply_body"):
+                            imap_client.append_draft_reply(
+                                candidate,
+                                decision.get("reply_subject") or f"Re: {candidate['subject']}",
+                                decision["reply_body"],
+                            )
+                            print(f"[email-poller] drafted reply to {candidate['from_email']!r} "
+                                  f"({candidate['subject']!r}): {decision.get('reason')}", flush=True)
+                        else:
+                            print(f"[email-poller] skipped {candidate['from_email']!r} "
+                                  f"({candidate['subject']!r}): {decision.get('reason')}", flush=True)
                     imap_client.mark_reviewed(candidate["uid"])
                 except Exception as e:
                     # One bad candidate (unparseable email, a transient API

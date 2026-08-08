@@ -22,6 +22,8 @@ from email.utils import parseaddr, parsedate_to_datetime
 
 IMAP_HOST = "imap.gmail.com"
 REVIEWED_LABEL = "Claude/Reviewed"
+PRICE_QUOTE_LABEL = "הצעות מחיר למעקב"
+PRICE_QUOTE_OVER_4000_LABEL = "מעל 4000"
 
 
 class ImapError(RuntimeError):
@@ -95,6 +97,55 @@ def mark_reviewed(uid):
     try:
         conn.select("INBOX")
         conn.uid("STORE", uid, "+X-GM-LABELS", f'("{REVIEWED_LABEL}")')
+    finally:
+        conn.logout()
+
+
+def _imap_utf7_encode(label):
+    """
+    Encodes a label name in the "modified UTF-7" scheme IMAP uses for
+    mailbox names (RFC 2060 §5.1.3) — Gmail requires X-GM-LABELS values
+    with non-ASCII characters (e.g. Hebrew) in this exact form. Confirmed
+    empirically: Gmail's IMAP parser rejects both a raw UTF-8 quoted
+    string AND a raw UTF-8 literal for X-GM-LABELS with a flat "BAD Could
+    not parse command" — modified UTF-7 as a quoted string is the only
+    form that actually works.
+    """
+    import base64
+
+    def modb64(chunk):
+        return base64.b64encode(chunk).decode("ascii").replace("/", ",").rstrip("=")
+
+    out, i, n = [], 0, len(label)
+    while i < n:
+        c = label[i]
+        if c == "&":
+            out.append("&-")
+            i += 1
+            continue
+        if 0x20 <= ord(c) <= 0x7E:
+            out.append(c)
+            i += 1
+            continue
+        j = i
+        while j < n and not (0x20 <= ord(label[j]) <= 0x7E):
+            j += 1
+        out.append("&" + modb64(label[i:j].encode("utf-16-be")) + "-")
+        i = j
+    return "".join(out)
+
+
+def apply_labels(uid, labels):
+    """Applies one or more Gmail labels to a message (e.g. price-quote
+    tracking labels), without touching \\Seen. Separate short-lived
+    connection, same pattern as mark_reviewed()."""
+    if not labels:
+        return
+    encoded = " ".join(f'"{_imap_utf7_encode(label)}"' for label in labels)
+    conn = _connect()
+    try:
+        conn.select("INBOX")
+        conn.uid("STORE", uid, "+X-GM-LABELS", f"({encoded})")
     finally:
         conn.logout()
 
