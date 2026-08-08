@@ -328,6 +328,11 @@ def api_monday_webhook():
     item_id = event.get("pulseId")
     column_id = event.get("columnId")
     if not item_id or column_id not in monday_client.PREDECESSOR_STEP_COLUMNS:
+        # Logged (not just silently dropped) so a payload-shape mismatch
+        # from Monday's side is diagnosable in Render's logs rather than
+        # this route quietly never firing for reasons that are invisible
+        # from the outside.
+        print(f"[monday-webhook] ignored payload: {payload!r}"[:1000], flush=True)
         return jsonify({"status": "ignored"})
 
     try:

@@ -626,7 +626,90 @@ confirmed by direct API inspection.
   for estimating a *not-yet-placed* order's rough turnaround, before it exists on the board. This
   assumption has **not been explicitly confirmed** by the studio owner — flag it for confirmation if
   a reply built from "Current Due" ever looks inconsistent with what §6 would predict.
-- No write-back to Monday (by design, for now) — this only reads status, it doesn't let staff update
-  a due date or move an order between stages from the pricing app.
+- The order-status lookup itself (`search_orders`) is still read-only by design — it doesn't let
+  staff update a due date or move an order between stages from the pricing app. (The Closing-status
+  webhook in §8 is a separate, narrowly-scoped write path — see there.)
 - Search is name/order-number only; there's no lookup by phone number or email, since those aren't
   columns on this board.
+
+---
+
+## 8. Closing-status automation — from native Monday automations to a webhook (2026-08-08)
+
+**The ask:** the studio owner wanted an existing (but not working) Monday automation fixed: when
+every production station on an order except Closing is Done (ignoring any that are Not Needed) and
+Closing is still sitting on Planned, Closing should advance to Pending Work — or straight to Urgent
+if the order's Priority is "Final Date" or "Purple Label" (the owner's own shorthand for "urgent";
+neither is a literal "Urgent" label on the Priority column itself — confirmed via a real board
+example, order 27672).
+
+### First attempt: 9 native Monday automations (built, then deleted)
+Investigated the board's existing automations (`Automate` button on the board, "Manage" tab) using
+the user's own logged-in Chrome session (Claude in Chrome) — no automation recipe already did this;
+the closest existing ones only handled the *Urgent* half (Priority → Urgent, gated on Closing already
+being Pending Work). Nothing set Planned → Pending Work in the first place.
+
+Mirrored the studio's own existing convention for other steps (e.g. Paint Brush has two automations:
+"When Carpentry changes to Done and only if Paint Brush is Planned and only if Paint Spray is Not
+Needed → set Paint Brush to Pending Work", "When Paint Spray changes to Done and only if Paint Brush
+is Planned → ...") and built 9 recipes, one per possible predecessor station (Carpentry, Paint
+Brush, Paint Spray, Aluminum, Mount, Passepartout, Chromaluxe, CNC, UV Printer), each: *"When
+[station] changes to Done, and only if Closing is Planned, set Closing to Pending Work."*
+
+**Deleted all 9 immediately after building them.** Monday's "and only if" condition only accepts a
+single value (confirmed by inspecting the condition's value picker — plain radio-style dropdown, no
+multi-select), so there was no way to also verify the *other* 8 stations were Done/Not Needed within
+one recipe. The 9 rules as built would fire the moment **any one** predecessor reached Done —
+correct if that happened to be the last remaining step, wrong (fires too early) if other stations
+were still in progress. The studio owner caught this directly ("so now if mounting change to done,
+the closing changes to pending?") and asked for it to be fixed properly rather than accepted as-is.
+
+### What's live instead: a webhook + real code
+`monday_client.py`:
+- `PREDECESSOR_STEP_COLUMNS` — the 9 station column IDs (everything in `STEP_COLUMNS` except Closing
+  itself).
+- `evaluate_closing_transition(item_id)` — **read-only**. Fetches the item's 9 predecessor columns +
+  Closing + Priority in one query; returns `("Urgent" | "Pending Work", board_id)` only if Closing is
+  currently Planned **and every one of the 9 predecessors is Done or Not Needed**, else `(None,
+  board_id)`. Unit-tested against three cases (all-done+Final-Date → Urgent, all-done+Normal →
+  Pending Work, one station still Working → `None`) and against real orders (25301, 27672) before
+  going live.
+- `set_closing_status(item_id, board_id, value)` — the only function that writes anything; calls
+  Monday's `change_simple_column_value` mutation.
+
+`app.py`:
+- `/api/monday/webhook` (POST) — exempted from the app's login gate in `require_login()` (Monday's
+  servers can't complete that flow). Handles Monday's webhook-verification `challenge` handshake,
+  ignores (and logs, for diagnosability) any event whose `columnId` isn't one of the 9 predecessors,
+  otherwise calls `evaluate_closing_transition` + `set_closing_status`.
+
+**9 webhook subscriptions** registered directly via Monday's API (`create_webhook` mutation, event
+`change_specific_column_value` — note: plain `change_column_value` does **not** support the
+`config: {"columnId": ...}` filter on this account/plan, it errors with `InvalidWebhookConfigException`;
+`change_specific_column_value` is the one that accepts a column filter), one per predecessor column,
+all pointing at `https://pricing-calc.onrender.com/api/monday/webhook` (the live Render URL,
+confirmed by testing `pricing-calc.onrender.com` against a handful of guessed names and matching it
+via the `x-render-origin-server: gunicorn` header + the app's own `/login` redirect behavior).
+
+**Verified end-to-end against real production data**, not just synthetic tests: order 27805 (Mount
+had already finished *before* this logic existed, so nothing had ever corrected its Closing status)
+was fed through the new endpoint directly and its Closing column flipped from Planned to Pending
+Work live on the board — confirmed by re-reading the order back afterward.
+
+### Known gap / thing to revisit
+Monday's `webhooks` API query only exposes `id`, `event`, `board_id`, `config` — **not the
+destination URL** (confirmed via GraphQL introspection on the `Webhook` type). While registering the
+9 new webhooks, the board turned out to already have a substantial number of pre-existing webhook
+subscriptions on this exact board — including several on these exact same predecessor columns
+(`foundations3`, `dup__of_carpentry`, `dup__of_paint_brush`, `dup__of_paint_spray`,
+`dup__of_aluminum`, `dup__of_glue`, `dup__of_chromaluxe`) plus others (`create_item`, `change_name`,
+a `change_status_column_value` on Priority, one on `text9`/`text4`). Since the API can't reveal where
+they point, there's no way to tell whether these are: a still-active integration (Zapier/Make/n8n/a
+custom app) doing something unrelated, remnants of an earlier abandoned attempt at this exact
+Closing-automation problem, or something else entirely. **Deliberately left untouched** rather than
+guessing and deleting someone else's possibly-live integration — flag for the studio owner to check
+(likely needs whoever manages those, possibly Harel given the "Harel Test" boards seen elsewhere in
+the account, or Monday's own integrations/developer center, which isn't reachable via this API).
+Multiple simultaneous webhook subscriptions on the same board/columns don't conflict with each other
+in Monday's model (each just fires to its own URL independently), so this doesn't put the new
+Closing-automation logic at risk — it's an awareness gap, not a functional one.
