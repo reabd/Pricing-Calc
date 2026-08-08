@@ -16,6 +16,8 @@ login — that's the default for local/trusted use.
 import os
 import secrets
 import shutil
+import threading
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -23,7 +25,9 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
 import business_rules
+import email_ai
 import email_sender
+import imap_client
 import llm_parser
 import monday_client
 from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, price_job
@@ -382,6 +386,58 @@ def api_price_list_update_item():
     slot["items"][resolved_name][field] = value
     catalog.save()
     return jsonify({"status": "saved"})
+
+
+def _run_email_poller(interval_seconds):
+    """
+    Background loop: checks the inbox, asks Claude to decide/draft for each
+    new candidate, appends confident drafts to [Gmail]/Drafts, and labels
+    every candidate reviewed regardless of the decision (so a skip doesn't
+    get re-judged, and re-billed, every single cycle). Never sends email —
+    see imap_client.py and email_ai.py for what each half actually does.
+
+    Runs as a daemon thread started at import time (not inside `if __name__
+    == "__main__"`) so it also starts under gunicorn in production, which
+    imports this module directly rather than running that block. Assumes a
+    single gunicorn worker (the Procfile doesn't set --workers) — multiple
+    workers would each start their own poller and duplicate the polling,
+    though not duplicate drafts, since the reviewed-label check is shared
+    mailbox state, not per-worker.
+    """
+    while True:
+        try:
+            candidates = imap_client.fetch_unanswered_inbox_emails()
+            for candidate in candidates:
+                try:
+                    decision = email_ai.decide_and_draft_reply(candidate)
+                    if decision.get("should_draft") and decision.get("reply_body"):
+                        imap_client.append_draft_reply(
+                            candidate,
+                            decision.get("reply_subject") or f"Re: {candidate['subject']}",
+                            decision["reply_body"],
+                        )
+                        print(f"[email-poller] drafted reply to {candidate['from_email']!r} "
+                              f"({candidate['subject']!r}): {decision.get('reason')}", flush=True)
+                    else:
+                        print(f"[email-poller] skipped {candidate['from_email']!r} "
+                              f"({candidate['subject']!r}): {decision.get('reason')}", flush=True)
+                    imap_client.mark_reviewed(candidate["uid"])
+                except Exception as e:
+                    # One bad candidate (unparseable email, a transient API
+                    # error) shouldn't take down the whole poll cycle or
+                    # stop other candidates from being processed. Left
+                    # un-labeled on failure so it's retried next cycle
+                    # rather than silently skipped forever.
+                    print(f"[email-poller] error on candidate {candidate.get('message_id')!r}: {e!r}", flush=True)
+        except Exception as e:
+            print(f"[email-poller] poll cycle failed: {e!r}", flush=True)
+        time.sleep(interval_seconds)
+
+
+if os.environ.get("EMAIL_POLLER_ENABLED", "").lower() == "true":
+    _poll_minutes = float(os.environ.get("EMAIL_POLLER_INTERVAL_MINUTES", "10"))
+    threading.Thread(target=_run_email_poller, args=(_poll_minutes * 60,), daemon=True).start()
+    print(f"[email-poller] started, polling every {_poll_minutes} minute(s)", flush=True)
 
 
 if __name__ == "__main__":

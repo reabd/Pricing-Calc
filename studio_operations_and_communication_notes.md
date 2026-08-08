@@ -713,3 +713,63 @@ the account, or Monday's own integrations/developer center, which isn't reachabl
 Multiple simultaneous webhook subscriptions on the same board/columns don't conflict with each other
 in Monday's model (each just fires to its own URL independently), so this doesn't put the new
 Closing-automation logic at risk — it's an awareness gap, not a functional one.
+
+---
+
+## 9. Background inbox poller — automatic draft replies (added 2026-08-08)
+
+**The ask:** the studio owner wants confident client emails drafted automatically, without having
+to ask per-session — and specifically *not* via the platform's scheduled-routine mechanism (its
+minimum interval is 1 hour, and a fresh routine run has none of this session's context anyway).
+Chose frequent polling from the Render app itself over true Gmail push notifications (Pub/Sub) —
+the push-notification route needs a full Google Cloud Console project + Pub/Sub setup; polling
+every few minutes with the same App Password already needed for the rush-flag SMTP feature gets
+80% of the benefit (near-instant in practice) for a fraction of the setup.
+
+### What was built
+- `imap_client.py` — reads the inbox via IMAP (Gmail App Password auth, same credential as
+  `email_sender.py`'s SMTP — one Google App Password grants both protocols). Key design points:
+  - `fetch_unanswered_inbox_emails()` finds unread INBOX messages, but **also checks
+    `[Gmail]/Sent Mail` for the same Gmail thread ID (`X-GM-THRID`) for a later message from us** —
+    this catches the real case correctly: an old message sitting unread in a thread where a *newer*
+    message in that same thread already got answered doesn't count as still-unanswered.
+  - Tracks "already judged" via a custom Gmail label (`Claude/Reviewed`, applied through IMAP's
+    `X-GM-LABELS` extension) rather than the `\Seen` flag — deliberately does not mark messages as
+    read, since staff rely on unread/read state for their own workflow and this bot's involvement
+    shouldn't change that signal.
+  - `append_draft_reply()` builds a properly-threaded reply (`In-Reply-To`/`References` set) and
+    IMAP-`APPEND`s it to `[Gmail]/Drafts`. Never sends — sending is not implemented anywhere in this
+    module.
+- `email_ai.py` — since there's no interactive Claude Code session backing this (unlike everywhere
+  else in this project), it calls the Claude API directly (`ANTHROPIC_API_KEY`, same key already
+  used by `llm_parser.py`, model `claude-sonnet-5`) with a forced tool call
+  (`submit_email_decision`: `should_draft` / `reason` / `reply_subject` / `reply_body`). The system
+  prompt embeds this **entire notes file** as context (so policy changes here automatically flow
+  through to what the poller knows, no separate copy to keep in sync) plus, when a Monday order
+  lookup for the sender's name or an order number found in the email turns up a match,
+  `monday_client.search_orders()` results — so order-status replies use real live data, not a
+  guess. Same "extremely conservative, skip is the safe default" instruction as the manual pass
+  earlier this session (skip anything needing a price quote, anything emotionally sensitive,
+  complaints, plain "thanks"/"I'll get back to you" messages, anything not confidently answerable).
+- `app.py` — `_run_email_poller()` background daemon thread, started **at module import time** (not
+  inside `if __name__ == "__main__"`) so it also runs under gunicorn in production (which imports
+  the module directly and never executes that block). Guarded behind `EMAIL_POLLER_ENABLED=true`
+  (off by default) and `EMAIL_POLLER_INTERVAL_MINUTES` (default 10). Marks every candidate reviewed
+  regardless of the decision — otherwise a skip would get re-judged (and re-billed against the
+  Claude API) every single poll cycle forever. A per-candidate exception doesn't take down the poll
+  cycle or leave that candidate silently un-retried — it's simply left unlabeled so the next cycle
+  picks it up again.
+
+### Known gaps / things to revisit
+- **Not yet enabled** — `SMTP_USERNAME`/`SMTP_PASSWORD` aren't configured in `.env` as of this
+  write-up (same App Password already pending from §7's rush-flag feature — one credential covers
+  both). Code is written and import-tested but not yet exercised against the real mailbox.
+- Assumes a single gunicorn worker (the `Procfile` doesn't set `--workers`) — multiple workers would
+  each start their own poller thread. Wouldn't duplicate drafts (the reviewed-label check is real
+  mailbox state, shared across workers), but would waste redundant Claude API calls between workers
+  racing to be first. Fine as-is; would need a lock (e.g. a Redis-backed one, or Render's own single
+  background-worker service type) if the Procfile ever changes to add more workers.
+- The Claude API call happens on every poll cycle for every not-yet-reviewed candidate — cost scales
+  with inbox volume, not with genuinely-actionable email volume, since spam/newsletters still cost
+  one API call each to correctly classify as "skip." Not addressed here; could add a cheap
+  pre-filter (sender domain blocklist, etc.) later if volume/cost becomes a real concern.
