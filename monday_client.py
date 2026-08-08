@@ -22,7 +22,7 @@ MONDAY_API_URL = "https://api.monday.com/v2"
 # display title is renamed), discovered by inspecting the board directly —
 # see the studio_operations_and_communication_notes.md §7 notes for the
 # full column list this board actually has.
-STATUS_COLUMN_IDS = ["dup__of_due_date", "date7", "status4", "dup__of_priority", "text9"]
+STATUS_COLUMN_IDS = ["dup__of_due_date", "date7", "status4", "dup__of_priority", "text9", "date_mkn4pghm"]
 
 # Per-production-station columns, in real workshop production order: each
 # entry is (status_col, label, scheduled_date_col, done_date_col). Every
@@ -174,12 +174,22 @@ def _parse_item(item):
         if status in HIDDEN_STEP_STATUSES:
             continue
         steps.append({"label": label, "status": status, "date": _fmt_date_he(date)})
+    workshop_due = cols.get("dup__of_due_date") or None
+    okapics_due = cols.get("date_mkn4pghm") or None
     return {
         "id": item["id"],
         "name": name,
         "order_number": number_match.group(1) if number_match else None,
         "stage": item["group"]["title"],
-        "current_due": cols.get("dup__of_due_date") or None,
+        # Okapics Due (a gallery/artist-consignment deadline, only set for
+        # that subset of orders) overrides the general Workshop due date
+        # when present — confirmed by the studio owner (2026-08-08) after
+        # a workshop-only order showed a stale Current Due while Okapics
+        # Due had the real, later date. See studio_operations_and_
+        # communication_notes.md §7 for the full context.
+        "current_due": okapics_due or workshop_due,
+        "workshop_due": workshop_due,
+        "okapics_due": okapics_due,
         "original_due": cols.get("date7") or None,
         "priority_status": cols.get("status4") or None,
         "picked_up": cols.get("dup__of_priority") or None,

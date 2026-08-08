@@ -534,10 +534,17 @@ confirmed by direct API inspection.
   Spray, Aluminum, Mount, Passepartout, Chromaluxe, CNC, UV Printer, Closing) — these are granular
   workshop-floor detail, **not** meant to be surfaced to clients; a client-facing status only needs
   the group/stage plus the due date.
-- Key columns for status lookups: `dup__of_due_date` ("Current Due" — the date that matters for "when
-  will it be ready"), `date7` ("Original Due"), `status4` ("Priority" — includes a `HOLD!` label
-  worth flagging specially), and `dup__of_priority` ("Picked-Up" — values `Picked-Up` / `Still Here`,
-  i.e. whether the client already collected a *Ready* order).
+- Key columns for status lookups: `dup__of_due_date` ("Current Due" — the workshop's own production
+  due date), `date_mkn4pghm` ("Okapics Due" — a separate deadline tied to the studio's Okapics
+  gallery/artist-consignment tracking, see §3, only populated for that subset of orders), `date7`
+  ("Original Due"), `status4` ("Priority" — includes a `HOLD!` label worth flagging specially), and
+  `dup__of_priority` ("Picked-Up" — values `Picked-Up` / `Still Here`, i.e. whether the client
+  already collected a *Ready* order).
+  - **Confirmed by the studio owner (2026-08-08):** when both are set, **Okapics Due overrides
+    Current Due** for "when will it be ready" purposes — caught when order `27187` showed Current
+    Due `24.07.2026` while Okapics Due (the real commitment) was `09.08.2026`. `monday_client.py`'s
+    `current_due` field is the already-resolved value (Okapics Due if present, else Current Due);
+    `workshop_due` and `okapics_due` are also exposed separately for transparency/debugging.
 - The board is large (~7,000 items across the studio's history), so lookups are done via Monday's
   API search (`items_page` with a `contains_text` query on the item name) rather than pulling the
   whole board — a bare 4-6 digit number in the query searches by order number (exact and
@@ -554,6 +561,11 @@ confirmed by direct API inspection.
   get back one card per match with the pipeline stage and a ready-to-paste Hebrew reply line, e.g.:
   *"ההזמנה שלך (מס' 25301) בעבודה אצלנו בבית המלאכה כרגע, צפויה להיות מוכנה בתאריך 21.07.2026."*
   Matches the studio's real reply tone from §1 (casual, direct, no formal register).
+- Each card also shows a **vertical step timeline** (staff-facing, internal use — not part of the
+  client reply text) for that order's production stations: colored dot + step name + status + date,
+  one line per step. Steps with status `Not Needed` are dropped entirely rather than listed, per the
+  studio owner's request (2026-08-08) — a plain print order might only show 1-2 relevant steps
+  instead of all 10 stations.
 - Credentials: `MONDAY_API_TOKEN` and `MONDAY_BOARD_ID` live in the app's local `.env` (gitignored,
   same pattern as `ANTHROPIC_API_KEY`) — never committed, never hard-coded.
 
