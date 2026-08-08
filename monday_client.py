@@ -161,6 +161,11 @@ def search_orders(query_text, limit=10):
     if not boards:
         return []
     orders = [_parse_item(item) for item in boards[0]["items_page"]["items"]]
+    # Drop orders already in the "Ready" stage — in practice these are
+    # long since picked up (see order 21931: stage Ready, open 647 days)
+    # and just clutter a name search with stale history a client isn't
+    # asking about. Confirmed by the studio owner (2026-08-08).
+    orders = [o for o in orders if o["stage"] != "Ready"]
     # Active/not-yet-collected orders first; already-picked-up ones last,
     # since a client asking "when will it be ready" almost always means
     # their current order, not a past one that happens to share a name.
