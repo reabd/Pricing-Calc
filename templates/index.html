@@ -890,7 +890,7 @@ async function runOrderStatusSearch() {
         <div class="order-name">${o.name}</div>
         <span class="order-stage">${stageLabel}${pickedUp ? ' · Picked up' : ''}</span>
         <div class="order-reply">${o.reply_text}</div>
-        <div class="order-meta">${o.current_due ? 'Current due: ' + o.current_due : 'No due date set'}${o.priority_status === 'HOLD!' ? ' · ⚠ HOLD' : ''}</div>
+        <div class="order-meta">${o.current_due ? 'Current due: ' + o.current_due : 'No due date set'}${o.priority_status ? ' · Priority: ' + o.priority_status + (o.priority_status === 'HOLD!' ? ' ⚠' : '') : ''}</div>
         ${renderSteps(o.steps)}
         ${pickedUp ? '' : `<div class="rush-flag" data-order-name="${o.name}" data-stage="${stageLabel}" data-due="${o.current_due || ''}">
           <input type="date" class="rush-date-input">
