@@ -27,8 +27,16 @@ namespace :deploy do
   desc 'Install Python dependencies into shared venv'
   task :pip_install do
     on roles(:app) do
-      venv_python = shared_path.join('venv/bin/python')
-      execute :python3, '-m', 'venv', shared_path.join('venv'), raise_on_non_zero_exit: false
+      venv_path = shared_path.join('venv')
+      venv_python = venv_path.join('bin/python')
+      pip = venv_path.join('bin/pip')
+
+      unless test("[ -x #{pip} ]")
+        execute :rm, '-rf', venv_path
+        execute :python3, '-m', 'venv', venv_path
+        execute venv_python, '-m', 'ensurepip', '--upgrade'
+      end
+
       within release_path do
         execute venv_python, '-m', 'pip', 'install', '-r', 'requirements.txt'
       end
