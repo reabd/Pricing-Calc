@@ -16,6 +16,8 @@ set :linked_dirs, %w[venv]
 set :pricing_calc_service, 'okapics-pricing-calc'
 set :pricing_calc_port, '5050'
 
+# net-ssh 6.1 cipher restrictions (same as okapics config/deploy.rb).
+# Capfile sets forward_agent last, matching okapics deploy behaviour.
 set :ssh_options, {
   encryption: %w[aes256-ctr aes192-ctr aes128-ctr],
   hmac: %w[hmac-sha2-512-etm@openssh.com hmac-sha2-256-etm@openssh.com hmac-sha2-512 hmac-sha2-256 hmac-sha1]
