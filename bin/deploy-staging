@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+export RBENV_VERSION="${RBENV_VERSION:-2.7.8}"
+export BUNDLE_GEMFILE="${BUNDLE_GEMFILE:-$(cd ../opics 2>/dev/null && pwd)/Gemfile}"
+if [[ ! -f "$BUNDLE_GEMFILE" ]]; then
+  echo "Set BUNDLE_GEMFILE to okapics/Gemfile (capistrano SSH matches okapics deploy)." >&2
+  exit 1
+fi
+exec bundle exec cap staging "$@"
