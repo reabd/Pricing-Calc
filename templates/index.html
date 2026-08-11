@@ -396,13 +396,15 @@ const EXCLUDED = {{ excluded_features | tojson }};
 document.getElementById('excluded-list').innerHTML =
   EXCLUDED.map(x => `<li>${x}</li>`).join('');
 
+const API_BASE = {{ request.script_root|tojson }};
+
 function fmt(n) { return new Intl.NumberFormat('en-US', {maximumFractionDigits:0}).format(Math.round(n)); }
 
 let slotLabels = {};
 let slotItems = {};
 let presetComponents = {};
 (async () => {
-  const [catalogRes, presetsRes] = await Promise.all([fetch('/api/catalog'), fetch('/api/presets')]);
+  const [catalogRes, presetsRes] = await Promise.all([fetch(API_BASE + '/api/catalog'), fetch(API_BASE + '/api/presets')]);
   const slots = await catalogRes.json();
   const presets = await presetsRes.json();
   slotLabels = Object.fromEntries(slots.map(s => [s.key, s.label]));
@@ -712,7 +714,7 @@ async function updateArtGlassLabel(currentLines) {
   const currentGlassLine = currentLines.find(l => l.slot_key === 'row24_glasses');
   const currentTotal = currentGlassLine ? currentGlassLine.line_total : 0;
   try {
-    const res = await fetch('/api/quote/structured', {
+    const res = await fetch(API_BASE + '/api/quote/structured', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({lines: [{...currentJob, preset_key: null,
         components: [{slot_key: 'row24_glasses', item_name: 'Art Glass 70%'}]}]})
@@ -736,7 +738,7 @@ async function fetchAndRenderQuote(presetKey, components) {
   const resultEl = document.getElementById('calc-result');
   statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
   try {
-    const res = await fetch('/api/quote/structured', {
+    const res = await fetch(API_BASE + '/api/quote/structured', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({lines: [{...currentJob, preset_key: presetKey, components}]})
     });
@@ -809,7 +811,7 @@ document.getElementById('quote-submit').addEventListener('click', async () => {
   if (!text) return;
   statusEl.innerHTML = '<span class="spinner"></span>Thinking…';
   try {
-    const res = await fetch('/api/quote/freetext', {
+    const res = await fetch(API_BASE + '/api/quote/freetext', {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text})
     });
     const data = await res.json();
@@ -875,7 +877,7 @@ async function runOrderStatusSearch() {
   if (!text) return;
   statusEl.innerHTML = '<span class="spinner"></span>Checking Monday…';
   try {
-    const res = await fetch('/api/order-status?q=' + encodeURIComponent(text));
+    const res = await fetch(API_BASE + '/api/order-status?q=' + encodeURIComponent(text));
     const data = await res.json();
     statusEl.innerHTML = '';
     if (data.error) { resultsEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
@@ -922,7 +924,7 @@ document.getElementById('order-status-results').addEventListener('click', async 
   btn.disabled = true;
   statusEl.textContent = 'Sending…';
   try {
-    const res = await fetch('/api/order-status/flag-rush', {
+    const res = await fetch(API_BASE + '/api/order-status/flag-rush', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         order_name: wrap.dataset.orderName,
@@ -955,7 +957,7 @@ document.getElementById('update-preview').addEventListener('click', async () => 
   if (!text) return;
   statusEl.innerHTML = '<span class="spinner"></span>Thinking…';
   try {
-    const res = await fetch('/api/price-update/parse', {
+    const res = await fetch(API_BASE + '/api/price-update/parse', {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text})
     });
     const data = await res.json();
@@ -976,7 +978,7 @@ document.getElementById('update-preview').addEventListener('click', async () => 
     diffsEl.innerHTML = html;
 
     document.getElementById('update-confirm').addEventListener('click', async () => {
-      const r = await fetch('/api/price-update/apply', {
+      const r = await fetch(API_BASE + '/api/price-update/apply', {
         method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({diffs: pendingDiffs})
       });
       const result = await r.json();
@@ -1002,7 +1004,7 @@ async function loadPriceList() {
   el.textContent = 'Loading…';
 
   const [presetsRes, slotsRes] = await Promise.all([
-    fetch('/api/presets'), fetch('/api/price-list')
+    fetch(API_BASE + '/api/presets'), fetch(API_BASE + '/api/price-list')
   ]);
   const presets = await presetsRes.json();
   const slots = await slotsRes.json();
@@ -1042,7 +1044,7 @@ async function loadPriceList() {
       const value = type === 'pct' ? raw / 100 : raw;
       input.classList.remove('save-ok', 'save-error');
       try {
-        const res = await fetch('/api/price-list/update-item', {
+        const res = await fetch(API_BASE + '/api/price-list/update-item', {
           method: 'POST', headers: {'Content-Type':'application/json'},
           body: JSON.stringify({slot_key: slotKey, item_name: itemName, field, value})
         });
