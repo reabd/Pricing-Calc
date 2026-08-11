@@ -1,8 +1,0 @@
-name: capistrano
-
-services:
-  ssh_server:
-    build:
-      context: .docker
-    ports:
-      - "2022:22"
