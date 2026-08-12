@@ -21,8 +21,10 @@ from pathlib import Path
 import anthropic
 
 NOTES_PATH = Path(__file__).resolve().parent / "studio_operations_and_communication_notes.md"
+SKILL_PATH = Path(__file__).resolve().parent / ".claude/skills/answer-print-house-email/SKILL.md"
 MODEL = "claude-sonnet-5"
 SECTION_HEADER = "## 10. Auto-observed learnings (pending review)"
+SKILL_SECTION_HEADER = "## 6. Auto-learned facts (from real client replies)"
 
 # Same PRICING_DATA_PATH convention as app.py: point this at a persistent
 # disk in production (LEARNING_LOG_PATH) so the daily digest (see
@@ -127,7 +129,11 @@ def append_learnings(facts, citation):
     """
     Appends each fact to a dedicated, clearly-marked section at the end of
     the notes file, with a citation (subject + date) so a human can trace
-    it back to the real exchange. Creates the section on first use.
+    it back to the real exchange. Creates the section on first use. Also
+    mirrors the same facts into the answer-print-house-email skill (see
+    _append_to_skill) — that's the file Claude Code sessions actually read
+    when drafting interactively, so learnings need to live there directly,
+    not just be reachable via a pointer.
     """
     if not facts:
         return
@@ -144,6 +150,29 @@ def append_learnings(facts, citation):
     NOTES_PATH.write_text(text, encoding="utf-8")
 
     _log_facts(facts, citation)
+    _append_to_skill(facts, citation)
+
+
+def _append_to_skill(facts, citation):
+    """Mirrors newly learned facts into the skill file itself. A failure
+    here shouldn't take down the caller — the notes-file append above
+    already succeeded and is the more important write."""
+    try:
+        if not SKILL_PATH.exists():
+            return
+        text = SKILL_PATH.read_text(encoding="utf-8")
+        if SKILL_SECTION_HEADER not in text:
+            text = text.rstrip("\n") + (
+                f"\n\n---\n\n{SKILL_SECTION_HEADER}\n\n"
+                "Facts auto-extracted by the background poller from real client emails and the "
+                "studio's actual replies (mirrors studio_operations_and_communication_notes.md "
+                "§10). Apply these the same way as the rest of this skill.\n"
+            )
+        entry = "\n".join(f"- {fact} ({citation})" for fact in facts)
+        text = text.rstrip("\n") + "\n" + entry + "\n"
+        SKILL_PATH.write_text(text, encoding="utf-8")
+    except OSError as e:
+        print(f"[email-learner] failed to write skill file: {e!r}", flush=True)
 
 
 def _log_facts(facts, citation):

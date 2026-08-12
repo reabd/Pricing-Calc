@@ -808,6 +808,14 @@ very next drafting decision in the same process, without a restart. The pending-
 meant to be periodically skimmed by a human and folded into the real sections (or discarded) — it is
 not treated as settled policy on its own.
 
+Every extracted fact is also mirrored into
+[`.claude/skills/answer-print-house-email/SKILL.md`](.claude/skills/answer-print-house-email/SKILL.md)
+§6 (added 2026-08-12, `email_learning._append_to_skill()`) — this file's §10 is what the *automated*
+poller reads (via `email_ai.py`), but the skill file is what an interactive Claude Code session reads
+when drafting or reviewing client email by hand, and those are two different consumers that don't
+otherwise share state. A failed skill-file write doesn't block the notes-file write, which stays the
+authoritative copy.
+
 ---
 
 ## 11. Daily learning-summary email (added 2026-08-12)
@@ -835,3 +843,10 @@ Guarded behind `DAILY_REPORT_ENABLED=true` (off by default), with `DAILY_REPORT_
 `rea@theprinthouse.co.il`) and `DAILY_REPORT_TIME` (default `18:00`) both overridable in `.env`. By
 design, an empty day still sends an email (studio owner's explicit choice, 2026-08-12) — a missing
 email is meant to read as "the automation broke," not "nothing happened."
+
+---
+
+## 10. Auto-observed learnings (pending review)
+
+Facts auto-extracted by the background poller from real client emails and the studio's actual replies (see §9). Not yet reviewed or folded into the sections above — treat as a candidate list, not settled policy.
+- Test: AR glass swap adds 200 NIS open/close labor. (Test thread, 2026-08-12)
