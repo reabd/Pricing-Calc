@@ -202,7 +202,12 @@ def price_parsed_lines(parsed_lines, apply_business_rules=False):
                 return {"clarification_needed": error}
 
         component_requests = [
-            JobComponentRequest(slot_key, data["item_name"], data["quantity"])
+            JobComponentRequest(
+                slot_key,
+                data.get("item_name") or "",
+                data.get("quantity", 1.0),
+                data.get("opics_id") or "",
+            )
             for slot_key, data in components.items()
         ]
         result = price_job(
@@ -410,6 +415,21 @@ EDITABLE_PRICE_LIST_FIELDS = {
     "fixed_effort_cost", "var_effort_cost", "min_effort_cost", "effort_indirect", "effort_risk", "effort_profit",
 }
 
+UNPRICED_ITEM_TEMPLATE = {
+    "fixed_material_cost": 0,
+    "var_material_cost": 0,
+    "material_indirect": 0,
+    "material_risk": 0,
+    "material_profit": 0,
+    "var_effort_cost": 0,
+    "fixed_effort_cost": 0,
+    "min_effort_cost": 0,
+    "effort_indirect": 0,
+    "effort_risk": 0,
+    "effort_profit": 0,
+    "unpriced": True,
+}
+
 
 @app.route("/api/price-list/update-item", methods=["POST"])
 def api_price_list_update_item():
@@ -444,6 +464,53 @@ def api_price_list_update_item():
     slot["items"][resolved_name][field] = value
     catalog.save()
     return jsonify({"status": "saved"})
+
+
+@app.route("/api/price-list/link-opics-id", methods=["POST"])
+def api_price_list_link_opics_id():
+    data = request.json or {}
+    slot_key = data.get("slot_key")
+    opics_id = (data.get("opics_id") or "").strip()
+    item_name = (data.get("item_name") or "").strip()
+
+    if not slot_key or not opics_id:
+        return jsonify({"error": "slot_key and opics_id are required."}), 400
+
+    try:
+        slot = catalog.get_slot(slot_key)
+    except PricingError as e:
+        return jsonify({"error": str(e)}), 400
+
+    for name, rec in slot["items"].items():
+        if rec.get("opics_id", "").strip() == opics_id:
+            return jsonify({
+                "status": "exists",
+                "item_name": name,
+                "opics_id": opics_id,
+                "unpriced": bool(rec.get("unpriced")),
+            })
+
+    if not item_name:
+        item_name = f"Okapics {opics_id}"
+
+    if item_name in slot["items"]:
+        slot["items"][item_name]["opics_id"] = opics_id
+        catalog.save()
+        return jsonify({
+            "status": "linked",
+            "item_name": item_name,
+            "opics_id": opics_id,
+            "unpriced": bool(slot["items"][item_name].get("unpriced")),
+        })
+
+    slot["items"][item_name] = {**UNPRICED_ITEM_TEMPLATE, "opics_id": opics_id}
+    catalog.save()
+    return jsonify({
+        "status": "created",
+        "item_name": item_name,
+        "opics_id": opics_id,
+        "unpriced": True,
+    })
 
 
 def _try_price_quote(candidate):

@@ -303,8 +303,28 @@
   }
   button.enable-pricing:hover { background: color-mix(in srgb, var(--accent) 12%, var(--paper)); }
   button.enable-pricing:disabled { opacity: 0.5; cursor: default; }
-  .pricelist-toolbar { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; }
+  .pricelist-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
   .pricelist-toolbar label { font-size: 0.85rem; color: var(--ink-muted); cursor: pointer; user-select: none; }
+  .pricelist-link-opics {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-inline-start: auto;
+    font-size: 0.85rem;
+  }
+  .pricelist-link-opics input[type="text"] {
+    min-width: 220px; padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--line);
+    font-family: "IBM Plex Mono", monospace; font-size: 0.82rem;
+  }
+  .pricelist-link-opics select {
+    padding: 4px 6px; border-radius: var(--radius); border: 1px solid var(--line); font-size: 0.82rem;
+  }
+  .pricelist-link-opics button {
+    font-family: inherit; font-size: 0.78rem; cursor: pointer; padding: 4px 10px;
+    border-radius: var(--radius); border: 1px solid var(--accent); background: transparent; color: var(--accent);
+  }
+  .pricelist-link-opics .link-opics-status { font-size: 0.78rem; color: var(--ink-muted); min-width: 80px; }
+  .badge-opics-id {
+    display: block; margin-top: 4px; font-size: 0.72rem; color: var(--ink-muted);
+    font-family: "IBM Plex Mono", monospace; word-break: break-all;
+  }
 
   details { border-bottom: 1px solid var(--line); padding: 10px 0; }
   summary { cursor: pointer; font-weight: 500; font-size: 0.92rem; }
@@ -1050,6 +1070,15 @@ function renderPriceListTables(slots, el) {
   const showUnpricedOnly = !!(window.__priceListShowUnpricedOnly);
   let html = `<div class="pricelist-toolbar">
     <label><input type="checkbox" id="pricelist-unpriced-only" ${showUnpricedOnly ? 'checked' : ''}> Show unpriced only</label>
+    <div class="pricelist-link-opics">
+      <label for="pricelist-opics-slot">Link Okapics ID</label>
+      <select id="pricelist-opics-slot">
+        ${slots.map(s => `<option value="${s.key}"${s.key === 'row23_profile_preset' ? ' selected' : ''}>${s.label}</option>`).join('')}
+      </select>
+      <input type="text" id="pricelist-opics-id" placeholder="0.7/4.0 -12 white 027">
+      <button type="button" id="pricelist-link-opics-btn">Link</button>
+      <span class="link-opics-status" id="pricelist-link-opics-status"></span>
+    </div>
   </div>`;
 
   for (const slot of slots) {
@@ -1066,6 +1095,7 @@ function renderPriceListTables(slots, el) {
       const unpriced = !!item.unpriced;
       html += `<tr class="${unpriced ? 'unpriced-row' : ''}"><td>${name}`
         + (unpriced ? ` <span class="badge-unpriced">Unpriced</span>` : '')
+        + (item.opics_id ? `<span class="badge-opics-id" title="Okapics ID">Okapics: ${item.opics_id}</span>` : '')
         + `</td>`
         + PRICE_LIST_FIELDS.map(f => editableCell(slot.key, name, f, item[f.field])).join('')
         + `<td>${unpriced
@@ -1081,6 +1111,41 @@ function renderPriceListTables(slots, el) {
     filter.addEventListener('change', () => {
       window.__priceListShowUnpricedOnly = filter.checked;
       renderPriceListTables(window.__priceListSlots || [], el);
+    });
+  }
+
+  const linkBtn = document.getElementById('pricelist-link-opics-btn');
+  const linkStatus = document.getElementById('pricelist-link-opics-status');
+  const linkInput = document.getElementById('pricelist-opics-id');
+  const linkSlot = document.getElementById('pricelist-opics-slot');
+  if (linkBtn && linkInput && linkSlot) {
+    linkBtn.addEventListener('click', async () => {
+      const opicsId = linkInput.value.trim();
+      if (!opicsId) {
+        if (linkStatus) linkStatus.textContent = 'Enter an ID';
+        return;
+      }
+      linkBtn.disabled = true;
+      if (linkStatus) linkStatus.textContent = 'Linking…';
+      try {
+        const res = await fetch(API_BASE + '/api/price-list/link-opics-id', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({slot_key: linkSlot.value, opics_id: opicsId})
+        });
+        const data = await res.json();
+        if (data.error) {
+          if (linkStatus) linkStatus.textContent = data.error;
+        } else {
+          if (linkStatus) linkStatus.textContent = data.status === 'exists' ? 'Already linked' : 'Linked';
+          linkInput.value = '';
+          window.__pricelistLoaded = false;
+          loadPriceList();
+        }
+      } catch (e) {
+        if (linkStatus) linkStatus.textContent = 'Failed';
+      }
+      linkBtn.disabled = false;
+      setTimeout(() => { if (linkStatus) linkStatus.textContent = ''; }, 2500);
     });
   }
 

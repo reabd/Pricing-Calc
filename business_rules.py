@@ -178,8 +178,8 @@ def apply_box_back_frame_rule(components, height_cm, width_cm):
     if PROFILE_SLOT_KEY not in components or slot_key in components:
         return components
 
-    profile_item = components[PROFILE_SLOT_KEY]["item_name"]
-    if not profile_item.startswith("Box ") or profile_item.startswith("Box Ready Wood"):
+    profile_item = components[PROFILE_SLOT_KEY].get("item_name")
+    if not profile_item or not profile_item.startswith("Box ") or profile_item.startswith("Box Ready Wood"):
         return components
 
     perimeter_m = (height_cm + width_cm) * 2 / 100
@@ -222,8 +222,8 @@ def apply_box_glyph_rule(components, height_cm, width_cm):
     if PROFILE_SLOT_KEY not in components:
         return components
 
-    profile_item = components[PROFILE_SLOT_KEY]["item_name"]
-    if not profile_item.startswith("Box ") or profile_item.startswith("Box Ready Wood"):
+    profile_item = components[PROFILE_SLOT_KEY].get("item_name")
+    if not profile_item or not profile_item.startswith("Box ") or profile_item.startswith("Box Ready Wood"):
         return components
 
     components.pop(wood_slot, None)

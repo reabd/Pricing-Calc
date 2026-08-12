@@ -82,8 +82,21 @@ class PricingCatalog:
         for name, rec in items.items():
             if name.strip().lower() == norm:
                 return slot, name, rec
+        # Okapics ID may be sent as item_name when opics_id field is absent
+        try:
+            return self.find_item_by_opics_id(slot_key, item_name)
+        except PricingError:
+            pass
         raise PricingError(f"Item {item_name!r} not found in slot {slot_key!r}. "
                             f"Available: {', '.join(items)}")
+
+    def find_item_by_opics_id(self, slot_key, opics_id):
+        slot = self.get_slot(slot_key)
+        norm = opics_id.strip()
+        for name, rec in slot["items"].items():
+            if rec.get("opics_id", "").strip() == norm:
+                return slot, name, rec
+        raise PricingError(f"No item with opics_id {opics_id!r} in slot {slot_key!r}.")
 
     def get_preset(self, preset_key):
         preset = self.presets.get(preset_key)
@@ -123,20 +136,28 @@ class PricingCatalog:
             for comp in self.get_preset(preset_key)["components"]:
                 merged[comp["slot_key"]] = {"item_name": comp["item_name"], "quantity": 1.0}
         for comp in overrides:
-            if comp.get("item_name") is None:
+            if comp.get("item_name") is None and not comp.get("opics_id"):
                 merged.pop(comp["slot_key"], None)
                 continue
-            merged[comp["slot_key"]] = {
-                "item_name": comp["item_name"],
+            entry = {
+                "item_name": comp.get("item_name"),
                 "quantity": comp.get("quantity", 1.0),
             }
+            if comp.get("opics_id"):
+                entry["opics_id"] = comp["opics_id"]
+            merged[comp["slot_key"]] = entry
         return merged
 
     def resolve_components(self, preset_key, overrides):
         """Same as resolve_components_dict, returned as a JobComponentRequest list."""
         merged = self.resolve_components_dict(preset_key, overrides)
         return [
-            JobComponentRequest(slot_key, data["item_name"], data["quantity"])
+            JobComponentRequest(
+                slot_key,
+                data.get("item_name") or "",
+                data.get("quantity", 1.0),
+                data.get("opics_id") or "",
+            )
             for slot_key, data in merged.items()
         ]
 
@@ -222,8 +243,9 @@ def price_component(item, size_mode, height_cm, width_cm, quantity=1.0):
 @dataclass
 class JobComponentRequest:
     slot_key: str
-    item_name: str
-    quantity: float = 1.0  # hours, for "manual_hours" slots; ignored otherwise
+    item_name: str = ""
+    quantity: float = 1.0
+    opics_id: str = ""
 
 
 @dataclass
@@ -248,7 +270,10 @@ def price_job(catalog: PricingCatalog, components, height_cm, width_cm,
     addon = {"material_cost": 0.0, "material_price": 0.0, "work_cost": 0.0, "work_price": 0.0}
 
     for comp in components:
-        slot, resolved_name, item = catalog.find_item(comp.slot_key, comp.item_name)
+        if comp.opics_id:
+            slot, resolved_name, item = catalog.find_item_by_opics_id(comp.slot_key, comp.opics_id)
+        else:
+            slot, resolved_name, item = catalog.find_item(comp.slot_key, comp.item_name)
         priced = price_component(item, slot["size_mode"], height_cm, width_cm, comp.quantity)
         unpriced = bool(priced.pop("unpriced", False))
 
