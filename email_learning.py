@@ -13,7 +13,9 @@ Deliberately does not touch the notes file's existing sections — an LLM
 editing its own knowledge base unsupervised is exactly the kind of thing
 that should stay reviewable, not silently authoritative.
 """
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
@@ -21,6 +23,16 @@ import anthropic
 NOTES_PATH = Path(__file__).resolve().parent / "studio_operations_and_communication_notes.md"
 MODEL = "claude-sonnet-5"
 SECTION_HEADER = "## 10. Auto-observed learnings (pending review)"
+
+# Same PRICING_DATA_PATH convention as app.py: point this at a persistent
+# disk in production (LEARNING_LOG_PATH) so the daily digest (see
+# daily_report.py) survives redeploys, instead of living inside the
+# ephemeral git checkout like the bundled default does. Append-only JSONL,
+# one line per extracted fact — the source of truth for "what got learned
+# today," independent of the notes file's own §10 section (which is a
+# human-readable mirror, not something the digest parses).
+_bundled_log_path = Path(__file__).resolve().parent / "learning_log.jsonl"
+LOG_PATH = Path(os.environ.get("LEARNING_LOG_PATH", _bundled_log_path))
 
 _client = None
 
@@ -130,3 +142,20 @@ def append_learnings(facts, citation):
     entry = "\n".join(f"- {fact} ({citation})" for fact in facts)
     text = text.rstrip("\n") + "\n" + entry + "\n"
     NOTES_PATH.write_text(text, encoding="utf-8")
+
+    _log_facts(facts, citation)
+
+
+def _log_facts(facts, citation):
+    """Appends each fact to LOG_PATH with the current timestamp — read back
+    by daily_report.py to build the day's digest. A logging failure here
+    shouldn't take down the caller; the notes-file append above already
+    succeeded and is the more important write."""
+    try:
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with LOG_PATH.open("a", encoding="utf-8") as f:
+            now = datetime.now(timezone.utc).isoformat()
+            for fact in facts:
+                f.write(json.dumps({"logged_at": now, "fact": fact, "citation": citation}, ensure_ascii=False) + "\n")
+    except OSError as e:
+        print(f"[email-learner] failed to write learning log: {e!r}", flush=True)

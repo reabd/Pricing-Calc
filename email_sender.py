@@ -36,7 +36,10 @@ def _config():
     return host, int(port), username, password
 
 
-def send_email(to, subject, body):
+def send_email(to, subject, body, attachments=None):
+    """
+    attachments: optional list of (file_path, filename) tuples to attach.
+    """
     host, port, username, password = _config()
     from_addr = os.environ.get("SMTP_FROM") or username
 
@@ -45,6 +48,16 @@ def send_email(to, subject, body):
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
+
+    for file_path, filename in (attachments or []):
+        with open(file_path, "rb") as f:
+            data = f.read()
+        msg.add_attachment(
+            data,
+            maintype="application",
+            subtype="vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=filename,
+        )
 
     try:
         with smtplib.SMTP(host, port, timeout=15) as server:

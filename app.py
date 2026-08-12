@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
 import business_rules
+import daily_report
 import email_ai
 import email_learning
 import email_sender
@@ -572,6 +573,42 @@ if os.environ.get("EMAIL_POLLER_ENABLED", "").lower() == "true":
     _poll_minutes = float(os.environ.get("EMAIL_POLLER_INTERVAL_MINUTES", "10"))
     threading.Thread(target=_run_email_poller, args=(_poll_minutes * 60,), daemon=True).start()
     print(f"[email-poller] started, polling every {_poll_minutes} minute(s)", flush=True)
+
+
+def _run_daily_report_scheduler(recipient, hour, minute):
+    """
+    Background loop: sleeps until the next `hour:minute` in Asia/Jerusalem,
+    sends that day's learning-summary .docx (see daily_report.py), then
+    repeats. Computing the next-fire time fresh each iteration (rather than
+    a fixed sleep(24h)) keeps this correct across DST transitions. Runs as
+    a daemon thread started at import time, same pattern as the email
+    poller above — see studio_operations_and_communication_notes.md §11.
+    """
+    from datetime import datetime, timedelta
+
+    while True:
+        now = datetime.now(daily_report.REPORT_TIMEZONE)
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        time.sleep((target - now).total_seconds())
+
+        try:
+            daily_report.send_daily_report(target.date(), recipient)
+            print(f"[daily-report] sent for {target.date().isoformat()} to {recipient!r}", flush=True)
+        except Exception as e:
+            print(f"[daily-report] failed for {target.date().isoformat()}: {e!r}", flush=True)
+
+
+if os.environ.get("DAILY_REPORT_ENABLED", "").lower() == "true":
+    _report_recipient = os.environ.get("DAILY_REPORT_RECIPIENT", "rea@theprinthouse.co.il")
+    _report_hour, _report_minute = (int(x) for x in os.environ.get("DAILY_REPORT_TIME", "18:00").split(":"))
+    threading.Thread(
+        target=_run_daily_report_scheduler,
+        args=(_report_recipient, _report_hour, _report_minute),
+        daemon=True,
+    ).start()
+    print(f"[daily-report] started, sending to {_report_recipient!r} at {_report_hour:02d}:{_report_minute:02d} Asia/Jerusalem", flush=True)
 
 
 class _ScriptNameMiddleware:

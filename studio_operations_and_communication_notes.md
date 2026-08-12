@@ -796,3 +796,31 @@ invalidated (`invalidate_notes_cache()`) right after a write, so a fresh learnin
 very next drafting decision in the same process, without a restart. The pending-review section is
 meant to be periodically skimmed by a human and folded into the real sections (or discarded) — it is
 not treated as settled policy on its own.
+
+---
+
+## 11. Daily learning-summary email (added 2026-08-12)
+
+**The ask:** the studio owner wants a daily 18:00 email to `rea@theprinthouse.co.il` with a `.docx`
+summarizing everything the poller learned that day from real client emails and replies (§10 above).
+
+Every fact `email_learning.append_learnings()` writes also gets logged to an append-only JSONL file
+(`email_learning.LOG_PATH`, defaulting next to the app but overridable via `LEARNING_LOG_PATH` — same
+persistent-disk convention as `PRICING_DATA_PATH`, since the git checkout itself is wiped on every
+redeploy) — this log, not the notes file's §10 section, is what the daily digest actually reads,
+so a redeploy mid-day doesn't lose that day's entries as long as the log path is on persistent
+storage.
+
+`daily_report.py`: `_run_daily_report_scheduler()` (in `app.py`, a daemon thread started at import
+time like the poller) sleeps until the next `18:00 Asia/Jerusalem` (recomputed each cycle so DST
+transitions don't drift it), then calls `send_daily_report()` — builds a `.docx` via `python-docx`
+(one bullet per fact + its citation, or "Nothing new learned today" if the log has no entries for
+that date) and sends it as a real, immediate attachment via `email_sender.py` (extended with
+attachment support) to the configured recipient. This is a genuine send, not a draft — an internal
+report to the studio owner himself, same category as the existing "flag as rush" notification, not
+a client-facing message, so the poller's draft-only policy doesn't apply here.
+
+Guarded behind `DAILY_REPORT_ENABLED=true` (off by default), with `DAILY_REPORT_RECIPIENT` (default
+`rea@theprinthouse.co.il`) and `DAILY_REPORT_TIME` (default `18:00`) both overridable in `.env`. By
+design, an empty day still sends an email (studio owner's explicit choice, 2026-08-12) — a missing
+email is meant to read as "the automation broke," not "nothing happened."
