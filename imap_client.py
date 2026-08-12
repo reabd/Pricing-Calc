@@ -363,12 +363,20 @@ def fetch_recently_answered_pairs(days=3, limit=25):
         conn.logout()
 
 
-def append_draft_reply(original, reply_subject, reply_body):
+def append_draft_reply(original, reply_subject, reply_body, reply_html=None):
     """
     Builds a proper threaded reply (In-Reply-To / References set so Gmail
     shows it in the same conversation) and APPENDs it to [Gmail]/Drafts.
     Never sends. `original` is one of the dicts returned by
     fetch_unanswered_inbox_emails().
+
+    reply_html: optional — pass quote_reply.to_html(reply_body, language)
+    to get a real multipart/alternative message (styled paragraphs + the
+    studio's actual HTML signature) instead of bare plain text. Without
+    this, a raw IMAP-appended draft renders noticeably flatter than a
+    normal Gmail compose (no bold hours, no hyperlinked website, no
+    paragraph spacing) — see studio_operations_and_communication_notes.md
+    §9 for why this matters and when it was added.
     """
     username, _ = _credentials()
     msg = EmailMessage()
@@ -379,6 +387,8 @@ def append_draft_reply(original, reply_subject, reply_body):
         msg["In-Reply-To"] = original["message_id"]
         msg["References"] = original["message_id"]
     msg.set_content(reply_body)
+    if reply_html:
+        msg.add_alternative(reply_html, subtype="html")
 
     conn = _connect()
     try:

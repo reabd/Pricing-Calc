@@ -764,6 +764,17 @@ every few minutes with the same App Password already needed for the rush-flag SM
 - **Not yet enabled** — `SMTP_USERNAME`/`SMTP_PASSWORD` aren't configured in `.env` as of this
   write-up (same App Password already pending from §7's rush-flag feature — one credential covers
   both). Code is written and import-tested but not yet exercised against the real mailbox.
+- **Fixed (2026-08-12): drafts were plain-text only.** `imap_client.append_draft_reply()` originally
+  called `msg.set_content()` with no HTML alternative, so every automated draft (both the price-quote
+  path and the general `email_ai.py` path) rendered flat in Gmail — no bold hours, no hyperlinked
+  website, no real paragraph spacing, plain-text signature — unlike normal human-composed mail (or
+  the one-off drafts made via the Gmail MCP tool during this session, which did use an HTML body).
+  `append_draft_reply()` now takes an optional `reply_html` (built via `quote_reply.to_html()`, which
+  splits on blank-line-separated paragraphs and appends the studio's real styled signature block —
+  same helper already used for the manual MCP drafts) and sends a proper `multipart/alternative`
+  message. `email_ai.py`'s `DECISION_TOOL` schema was also updated to tell the model to use genuine
+  blank-line paragraph breaks and to never include the plain-text signature block itself (it's always
+  appended once, automatically, to avoid a duplicate).
 - Assumes a single gunicorn worker (the `Procfile` doesn't set `--workers`) — multiple workers would
   each start their own poller thread. Wouldn't duplicate drafts (the reviewed-label check is real
   mailbox state, shared across workers), but would waste redundant Claude API calls between workers

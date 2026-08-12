@@ -84,8 +84,16 @@ DECISION_TOOL = {
                     "Only if should_draft is true. Plain text, matching the sender's own "
                     "language (Hebrew or English), in the studio's real tone documented "
                     "below — casual, short, itemized where relevant, explicit about VAT if "
-                    "money is mentioned, signed off simply. Do not invent information not "
-                    "given below or in the studio notes."
+                    "money is mentioned. Do not invent information not given below or in the "
+                    "studio notes.\n\n"
+                    "Formatting matters — this gets rendered as real paragraphs, not a wall of "
+                    "text: put a genuine blank line (\\n\\n) between distinct parts (greeting, "
+                    "each itemized point, closing line) the same way the verbatim examples "
+                    "below are broken into separate lines, not one run-on paragraph. End with "
+                    "just a short closing (e.g. 'תודה' / 'Thanks' + first name if signing "
+                    "personally) — do NOT include the studio's standard signature block "
+                    "(address/phone/hours/website); that's appended automatically to every "
+                    "draft, so including it yourself would duplicate it."
                 ),
             },
         },

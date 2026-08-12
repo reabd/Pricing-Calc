@@ -517,7 +517,9 @@ def _run_email_poller(interval_seconds):
                     price_quote = _try_price_quote(candidate)
                     if price_quote:
                         reply_subject, reply_body, grand_total = price_quote
-                        imap_client.append_draft_reply(candidate, reply_subject, reply_body)
+                        language = "he" if re.search("[֐-׿]", reply_body) else "en"
+                        reply_html = quote_reply.to_html(reply_body, language)
+                        imap_client.append_draft_reply(candidate, reply_subject, reply_body, reply_html=reply_html)
                         labels = [imap_client.PRICE_QUOTE_LABEL]
                         if grand_total > 4000:
                             labels.append(imap_client.PRICE_QUOTE_OVER_4000_LABEL)
@@ -528,10 +530,14 @@ def _run_email_poller(interval_seconds):
                     else:
                         decision = email_ai.decide_and_draft_reply(candidate)
                         if decision.get("should_draft") and decision.get("reply_body"):
+                            reply_body = decision["reply_body"]
+                            language = "he" if re.search("[֐-׿]", reply_body) else "en"
+                            reply_html = quote_reply.to_html(reply_body, language)
                             imap_client.append_draft_reply(
                                 candidate,
                                 decision.get("reply_subject") or f"Re: {candidate['subject']}",
-                                decision["reply_body"],
+                                reply_body,
+                                reply_html=reply_html,
                             )
                             print(f"[email-poller] drafted reply to {candidate['from_email']!r} "
                                   f"({candidate['subject']!r}): {decision.get('reason')}", flush=True)
