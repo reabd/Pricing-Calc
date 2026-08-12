@@ -306,10 +306,12 @@
   .pricelist-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
   .pricelist-toolbar label { font-size: 0.85rem; color: var(--ink-muted); cursor: pointer; user-select: none; }
   input.editable-opics-id {
-    width: 220px; max-width: 100%; font-family: "IBM Plex Mono", monospace; font-size: 0.78rem;
+    width: 200px; max-width: 28vw; min-width: 140px;
+    font-family: "IBM Plex Mono", monospace; font-size: 0.78rem;
     text-align: start; padding: 3px 6px; border-radius: var(--radius); border: 1px solid var(--line);
     background: var(--paper); color: var(--ink);
   }
+  td.opics-id-cell { white-space: nowrap; vertical-align: middle; }
   input.editable-opics-id:focus { border-color: var(--accent); outline: none; }
   input.editable-opics-id.save-ok { border-color: #5a9c6e; background: color-mix(in srgb, #5a9c6e 12%, var(--paper)); }
   input.editable-opics-id.save-error { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--paper)); }
@@ -1076,7 +1078,7 @@ function renderPriceListTables(slots, el) {
       html += `<tr class="${unpriced ? 'unpriced-row' : ''}"><td>${escapeHtml(name)}`
         + (unpriced ? ` <span class="badge-unpriced">Unpriced</span>` : '')
         + `</td>`
-        + `<td>${opicsIdCell(slot.key, name, opicsId)}</td>`
+        + opicsIdCell(slot.key, name, opicsId)
         + PRICE_LIST_FIELDS.map(f => editableCell(slot.key, name, f, item[f.field])).join('')
         + `<td>${unpriced
             ? `<button type="button" class="enable-pricing" data-slot="${slot.key}" data-item="${escapeHtml(name)}">Enable pricing</button>`
@@ -1208,7 +1210,7 @@ function editableCell(slotKey, itemName, fieldDef, value) {
 }
 
 function opicsIdCell(slotKey, itemName, value) {
-  return `<td><input type="text" class="editable-opics-id" `
+  return `<td class="opics-id-cell"><input type="text" class="editable-opics-id" `
     + `placeholder="profiloid_preset_framies[…][…]" `
     + `value="${escapeHtml(value || '')}" `
     + `data-slot="${escapeHtml(slotKey)}" data-item="${escapeHtml(itemName)}"></td>`;
