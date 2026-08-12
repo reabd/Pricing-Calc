@@ -289,6 +289,23 @@
   input.editable-field.save-ok { border-color: #5a9c6e; background: color-mix(in srgb, #5a9c6e 12%, var(--paper)); }
   input.editable-field.save-error { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--paper)); }
 
+  .badge-unpriced {
+    display: inline-block; margin-inline-start: 6px; padding: 1px 6px; border-radius: 999px;
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+    color: var(--ink-muted); border: 1px solid var(--line); background: color-mix(in srgb, var(--ink-muted) 8%, var(--paper));
+    vertical-align: middle;
+  }
+  tr.unpriced-row td:first-child { color: var(--ink-muted); }
+  button.enable-pricing {
+    font-family: inherit; font-size: 0.75rem; cursor: pointer; white-space: nowrap;
+    padding: 3px 8px; border-radius: var(--radius); border: 1px solid var(--accent);
+    background: transparent; color: var(--accent);
+  }
+  button.enable-pricing:hover { background: color-mix(in srgb, var(--accent) 12%, var(--paper)); }
+  button.enable-pricing:disabled { opacity: 0.5; cursor: default; }
+  .pricelist-toolbar { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; }
+  .pricelist-toolbar label { font-size: 0.85rem; color: var(--ink-muted); cursor: pointer; user-select: none; }
+
   details { border-bottom: 1px solid var(--line); padding: 10px 0; }
   summary { cursor: pointer; font-weight: 500; font-size: 0.92rem; }
   summary::marker { color: var(--ink-muted); }
@@ -396,13 +413,18 @@ const EXCLUDED = {{ excluded_features | tojson }};
 document.getElementById('excluded-list').innerHTML =
   EXCLUDED.map(x => `<li>${x}</li>`).join('');
 
-function fmt(n) { return new Intl.NumberFormat('en-US', {maximumFractionDigits:0}).format(Math.round(n)); }
+const API_BASE = {{ request.script_root|tojson }};
+
+function fmt(n) {
+  if (n === null || n === undefined || Number.isNaN(n)) return 'N/A';
+  return new Intl.NumberFormat('en-US', {maximumFractionDigits:0}).format(Math.round(n));
+}
 
 let slotLabels = {};
 let slotItems = {};
 let presetComponents = {};
 (async () => {
-  const [catalogRes, presetsRes] = await Promise.all([fetch('/api/catalog'), fetch('/api/presets')]);
+  const [catalogRes, presetsRes] = await Promise.all([fetch(API_BASE + '/api/catalog'), fetch(API_BASE + '/api/presets')]);
   const slots = await catalogRes.json();
   const presets = await presetsRes.json();
   slotLabels = Object.fromEntries(slots.map(s => [s.key, s.label]));
@@ -710,9 +732,9 @@ async function updateArtGlassLabel(currentLines) {
   if (checkbox.checked) { textEl.textContent = 'Art Glass 70%'; return; }
 
   const currentGlassLine = currentLines.find(l => l.slot_key === 'row24_glasses');
-  const currentTotal = currentGlassLine ? currentGlassLine.line_total : 0;
+  const currentTotal = (currentGlassLine && currentGlassLine.line_total != null) ? currentGlassLine.line_total : 0;
   try {
-    const res = await fetch('/api/quote/structured', {
+    const res = await fetch(API_BASE + '/api/quote/structured', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({lines: [{...currentJob, preset_key: null,
         components: [{slot_key: 'row24_glasses', item_name: 'Art Glass 70%'}]}]})
@@ -736,7 +758,7 @@ async function fetchAndRenderQuote(presetKey, components) {
   const resultEl = document.getElementById('calc-result');
   statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
   try {
-    const res = await fetch('/api/quote/structured', {
+    const res = await fetch(API_BASE + '/api/quote/structured', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({lines: [{...currentJob, preset_key: presetKey, components}]})
     });
@@ -809,7 +831,7 @@ document.getElementById('quote-submit').addEventListener('click', async () => {
   if (!text) return;
   statusEl.innerHTML = '<span class="spinner"></span>Thinking…';
   try {
-    const res = await fetch('/api/quote/freetext', {
+    const res = await fetch(API_BASE + '/api/quote/freetext', {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text})
     });
     const data = await res.json();
@@ -875,7 +897,7 @@ async function runOrderStatusSearch() {
   if (!text) return;
   statusEl.innerHTML = '<span class="spinner"></span>Checking Monday…';
   try {
-    const res = await fetch('/api/order-status?q=' + encodeURIComponent(text));
+    const res = await fetch(API_BASE + '/api/order-status?q=' + encodeURIComponent(text));
     const data = await res.json();
     statusEl.innerHTML = '';
     if (data.error) { resultsEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
@@ -922,7 +944,7 @@ document.getElementById('order-status-results').addEventListener('click', async 
   btn.disabled = true;
   statusEl.textContent = 'Sending…';
   try {
-    const res = await fetch('/api/order-status/flag-rush', {
+    const res = await fetch(API_BASE + '/api/order-status/flag-rush', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         order_name: wrap.dataset.orderName,
@@ -955,7 +977,7 @@ document.getElementById('update-preview').addEventListener('click', async () => 
   if (!text) return;
   statusEl.innerHTML = '<span class="spinner"></span>Thinking…';
   try {
-    const res = await fetch('/api/price-update/parse', {
+    const res = await fetch(API_BASE + '/api/price-update/parse', {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text})
     });
     const data = await res.json();
@@ -976,7 +998,7 @@ document.getElementById('update-preview').addEventListener('click', async () => 
     diffsEl.innerHTML = html;
 
     document.getElementById('update-confirm').addEventListener('click', async () => {
-      const r = await fetch('/api/price-update/apply', {
+      const r = await fetch(API_BASE + '/api/price-update/apply', {
         method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({diffs: pendingDiffs})
       });
       const result = await r.json();
@@ -1002,11 +1024,12 @@ async function loadPriceList() {
   el.textContent = 'Loading…';
 
   const [presetsRes, slotsRes] = await Promise.all([
-    fetch('/api/presets'), fetch('/api/price-list')
+    fetch(API_BASE + '/api/presets'), fetch(API_BASE + '/api/price-list')
   ]);
   const presets = await presetsRes.json();
   const slots = await slotsRes.json();
   const slotLabel = Object.fromEntries(slots.map(s => [s.key, s.label]));
+  window.__priceListSlots = slots;
 
   let presetsHtml = '';
   for (const preset of presets) {
@@ -1019,20 +1042,47 @@ async function loadPriceList() {
   }
   presetsEl.innerHTML = presetsHtml;
 
-  let html = '';
+  renderPriceListTables(slots, el);
+  window.__pricelistLoaded = true;
+}
+
+function renderPriceListTables(slots, el) {
+  const showUnpricedOnly = !!(window.__priceListShowUnpricedOnly);
+  let html = `<div class="pricelist-toolbar">
+    <label><input type="checkbox" id="pricelist-unpriced-only" ${showUnpricedOnly ? 'checked' : ''}> Show unpriced only</label>
+  </div>`;
+
   for (const slot of slots) {
-    html += `<details><summary>${slot.label} <span class="muted">(${slot.kind}, ${slot.size_mode}) — ${Object.keys(slot.items).length} item(s)</span></summary>`;
+    const entries = Object.entries(slot.items).filter(([, item]) => !showUnpricedOnly || item.unpriced);
+    if (!entries.length) continue;
+    const unpricedCount = Object.values(slot.items).filter(i => i.unpriced).length;
+    html += `<details${unpricedCount && showUnpricedOnly ? ' open' : ''}><summary>${slot.label} <span class="muted">(${slot.kind}, ${slot.size_mode}) — ${entries.length} item(s)`
+      + (unpricedCount ? `, ${unpricedCount} unpriced` : '')
+      + `</span></summary>`;
     html += `<div class="table-wrap"><table><thead><tr><th>Item</th>`
       + PRICE_LIST_FIELDS.map(f => `<th class="num">${f.label}</th>`).join('')
-      + `</tr></thead><tbody>`;
-    for (const [name, item] of Object.entries(slot.items)) {
-      html += `<tr><td>${name}</td>`
+      + `<th></th></tr></thead><tbody>`;
+    for (const [name, item] of entries) {
+      const unpriced = !!item.unpriced;
+      html += `<tr class="${unpriced ? 'unpriced-row' : ''}"><td>${name}`
+        + (unpriced ? ` <span class="badge-unpriced">Unpriced</span>` : '')
+        + `</td>`
         + PRICE_LIST_FIELDS.map(f => editableCell(slot.key, name, f, item[f.field])).join('')
-        + `</tr>`;
+        + `<td>${unpriced
+            ? `<button type="button" class="enable-pricing" data-slot="${slot.key}" data-item="${name}">Enable pricing</button>`
+            : ''}</td></tr>`;
     }
     html += `</tbody></table></div></details>`;
   }
-  el.innerHTML = html;
+  el.innerHTML = html || '<div class="muted">No items match.</div>';
+
+  const filter = document.getElementById('pricelist-unpriced-only');
+  if (filter) {
+    filter.addEventListener('change', () => {
+      window.__priceListShowUnpricedOnly = filter.checked;
+      renderPriceListTables(window.__priceListSlots || [], el);
+    });
+  }
 
   el.querySelectorAll('.editable-field').forEach(input => {
     input.addEventListener('change', async () => {
@@ -1042,13 +1092,14 @@ async function loadPriceList() {
       const value = type === 'pct' ? raw / 100 : raw;
       input.classList.remove('save-ok', 'save-error');
       try {
-        const res = await fetch('/api/price-list/update-item', {
+        const res = await fetch(API_BASE + '/api/price-list/update-item', {
           method: 'POST', headers: {'Content-Type':'application/json'},
           body: JSON.stringify({slot_key: slotKey, item_name: itemName, field, value})
         });
         const data = await res.json();
         input.classList.add(data.error ? 'save-error' : 'save-ok');
         if (data.error) console.error(data.error);
+        else syncLocalPriceListField(slotKey, itemName, field, value);
       } catch (e) {
         input.classList.add('save-error');
       }
@@ -1056,7 +1107,42 @@ async function loadPriceList() {
     });
   });
 
-  window.__pricelistLoaded = true;
+  el.querySelectorAll('button.enable-pricing').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const slotKey = btn.dataset.slot;
+      const itemName = btn.dataset.item;
+      btn.disabled = true;
+      try {
+        const res = await fetch(API_BASE + '/api/price-list/update-item', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({slot_key: slotKey, item_name: itemName, field: 'unpriced', value: false})
+        });
+        const data = await res.json();
+        if (data.error) {
+          console.error(data.error);
+          btn.disabled = false;
+          return;
+        }
+        syncLocalPriceListUnpriced(slotKey, itemName, false);
+        renderPriceListTables(window.__priceListSlots || [], el);
+      } catch (e) {
+        console.error(e);
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function syncLocalPriceListField(slotKey, itemName, field, value) {
+  const slot = (window.__priceListSlots || []).find(s => s.key === slotKey);
+  if (slot && slot.items[itemName]) slot.items[itemName][field] = value;
+}
+
+function syncLocalPriceListUnpriced(slotKey, itemName, unpriced) {
+  const slot = (window.__priceListSlots || []).find(s => s.key === slotKey);
+  if (!slot || !slot.items[itemName]) return;
+  if (unpriced) slot.items[itemName].unpriced = true;
+  else delete slot.items[itemName].unpriced;
 }
 
 // Every cost-driver field on an item, editable directly in the table.

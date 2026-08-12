@@ -1,4 +1,8 @@
 .env
+.venv/
+vendor/bundle/
 __pycache__/
 *.pyc
 .DS_Store
+vendor/bundle/
+.bundle/

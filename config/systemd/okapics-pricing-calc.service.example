@@ -1,0 +1,18 @@
+[Unit]
+Description=Okapics Pricing-Calc (gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/home/deploy/pricing-calc/current
+EnvironmentFile=/home/deploy/pricing-calc/shared/.env.staging
+Environment=PRICING_DATA_PATH=/home/deploy/pricing-calc/shared/pricing_data.json
+Environment=APPLICATION_ROOT=/pricing-calculator
+ExecStart=/home/deploy/pricing-calc/shared/venv/bin/gunicorn --bind 127.0.0.1:5050 app:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

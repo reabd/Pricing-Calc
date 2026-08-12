@@ -38,6 +38,12 @@ from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, pr
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
+# Shared secret for machine-to-machine calls from Opics (and other
+# server clients). When set, any /api/* request that carries a matching
+# X-Pricing-Calc-Key header skips the browser session login gate.
+# The same key can also open a browser session via /auth/from_opics?key=...
+# so Opics can embed this app in an iframe without the shared password form.
+PRICING_CALC_API_KEY = os.environ.get("PRICING_CALC_API_KEY")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
@@ -68,15 +74,50 @@ else:
 catalog = PricingCatalog(_data_path)
 
 
+def _api_key_authorized():
+    if not PRICING_CALC_API_KEY:
+        return False
+    provided = request.headers.get("X-Pricing-Calc-Key", "") or request.args.get("key", "")
+    if not provided:
+        return False
+    return secrets.compare_digest(provided, PRICING_CALC_API_KEY)
+
+
+def _establish_api_key_session():
+    session.permanent = True
+    session["authenticated"] = True
+
+
 @app.before_request
 def require_login():
-    if not APP_PASSWORD:
-        return None  # no password configured -> auth disabled
-    if request.endpoint in ("login", "static", "api_monday_webhook"):
+    if request.endpoint in ("login", "static", "api_monday_webhook", "auth_from_opics"):
         return None
-    if not session.get("authenticated"):
+    if _api_key_authorized():
+        return None
+    if APP_PASSWORD and session.get("authenticated"):
+        return None
+    if not PRICING_CALC_API_KEY and not APP_PASSWORD:
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Unauthorized"}), 401
+    if APP_PASSWORD:
         return redirect(url_for("login", next=request.path))
-    return None
+    return jsonify({"error": "Unauthorized"}), 401
+
+
+@app.route("/auth/from_opics")
+def auth_from_opics():
+    """
+    One-shot browser SSO from Opics: Opics embeds
+    /auth/from_opics?key=<PRICING_CALC_API_KEY> in an iframe. Matching key
+    opens a normal Flask session so the UI works without APP_PASSWORD.
+    """
+    if not PRICING_CALC_API_KEY:
+        return "Pricing-Calc API key is not configured.", 503
+    if not _api_key_authorized():
+        return "Unauthorized", 401
+    _establish_api_key_session()
+    return redirect(url_for("index"))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -99,6 +140,10 @@ def logout():
     return redirect(url_for("login"))
 
 
+def _round_money(value):
+    return None if value is None else round(value, 2)
+
+
 def line_result_to_dict(result):
     return {
         "lines": [
@@ -106,10 +151,11 @@ def line_result_to_dict(result):
                 "slot_key": l.slot_key,
                 "item_name": l.item_name,
                 "quantity": l.quantity,
-                "material_price": round(l.material_price, 2),
-                "work_price": round(l.work_price, 2),
-                "line_total": round(l.line_total, 2),
+                "material_price": _round_money(None if l.unpriced else l.material_price),
+                "work_price": _round_money(None if l.unpriced else l.work_price),
+                "line_total": _round_money(l.line_total),
                 "scales_with_quantity": l.scales_with_quantity,
+                "unpriced": bool(l.unpriced),
             }
             for l in result.lines
         ],
@@ -374,17 +420,27 @@ def api_price_list_update_item():
     field = data.get("field")
     value = data.get("value")
 
+    try:
+        slot, resolved_name, _item = catalog.find_item(slot_key, item_name)
+    except PricingError as e:
+        return jsonify({"error": str(e)}), 400
+
+    if field == "unpriced":
+        # Explicit activate/deactivate. Clearing unpriced enables real quotes.
+        unpriced = bool(value)
+        if unpriced:
+            slot["items"][resolved_name]["unpriced"] = True
+        else:
+            slot["items"][resolved_name].pop("unpriced", None)
+        catalog.save()
+        return jsonify({"status": "saved", "unpriced": unpriced})
+
     if field not in EDITABLE_PRICE_LIST_FIELDS:
         return jsonify({"error": f"Field {field!r} can't be edited here."}), 400
     try:
         value = float(value)
     except (TypeError, ValueError):
         return jsonify({"error": "Value must be a number."}), 400
-
-    try:
-        slot, resolved_name, _item = catalog.find_item(slot_key, item_name)
-    except PricingError as e:
-        return jsonify({"error": str(e)}), 400
 
     slot["items"][resolved_name][field] = value
     catalog.save()
@@ -516,6 +572,25 @@ if os.environ.get("EMAIL_POLLER_ENABLED", "").lower() == "true":
     _poll_minutes = float(os.environ.get("EMAIL_POLLER_INTERVAL_MINUTES", "10"))
     threading.Thread(target=_run_email_poller, args=(_poll_minutes * 60,), daemon=True).start()
     print(f"[email-poller] started, polling every {_poll_minutes} minute(s)", flush=True)
+
+
+class _ScriptNameMiddleware:
+    """Honor reverse-proxy subpath via X-Script-Name (nginx at /pricing-calculator)."""
+
+    def __init__(self, app, default_root=""):
+        self.app = app
+        self.default_root = default_root.rstrip("/")
+
+    def __call__(self, environ, start_response):
+        script_name = environ.get("HTTP_X_SCRIPT_NAME") or self.default_root
+        if script_name:
+            environ["SCRIPT_NAME"] = script_name
+        return self.app(environ, start_response)
+
+
+_application_root = os.environ.get("APPLICATION_ROOT", "").rstrip("/")
+if _application_root:
+    app.wsgi_app = _ScriptNameMiddleware(app.wsgi_app, _application_root)
 
 
 if __name__ == "__main__":
