@@ -48,6 +48,7 @@ class PricingCatalog:
 
     def reload(self):
         data = json.loads(self.path.read_text(encoding="utf-8"))
+        self.source_file = data.get("source_file", "PrintHouse Pricing Calc v8_3 - 09_03_2025.xlsm")
         self.salary_per_hour = data["salary_per_hour"]
         self.vat_rate = data["vat_rate"]
         self.excluded_features = data["excluded_features"]
@@ -173,13 +174,30 @@ class ComponentPrice:
     work_cost: float
     work_price: float
     scales_with_quantity: bool
+    unpriced: bool = False
 
     @property
     def line_total(self):
+        if self.unpriced:
+            return None
         return self.material_price + self.work_price
 
 
+def is_unpriced_item(item):
+    """Catalog items marked unpriced exist for mapping but have no quote price."""
+    return bool(item.get("unpriced"))
+
+
 def price_component(item, size_mode, height_cm, width_cm, quantity=1.0):
+    if is_unpriced_item(item):
+        return {
+            "material_cost": 0.0,
+            "material_price": 0.0,
+            "work_cost": 0.0,
+            "work_price": 0.0,
+            "unpriced": True,
+        }
+
     size = compute_size(size_mode, height_cm, width_cm)
 
     material_cost = (item["fixed_material_cost"] + size * item["var_material_cost"]) \
@@ -197,6 +215,7 @@ def price_component(item, size_mode, height_cm, width_cm, quantity=1.0):
         "material_price": material_price * quantity,
         "work_cost": work_cost * quantity,
         "work_price": work_price * quantity,
+        "unpriced": False,
     }
 
 
@@ -231,16 +250,19 @@ def price_job(catalog: PricingCatalog, components, height_cm, width_cm,
     for comp in components:
         slot, resolved_name, item = catalog.find_item(comp.slot_key, comp.item_name)
         priced = price_component(item, slot["size_mode"], height_cm, width_cm, comp.quantity)
-        target = qty_scaled if slot["scales_with_quantity"] else addon
+        unpriced = bool(priced.pop("unpriced", False))
 
-        for k in target:
-            target[k] += priced[k]
+        if not unpriced:
+            target = qty_scaled if slot["scales_with_quantity"] else addon
+            for k in target:
+                target[k] += priced[k]
 
         lines.append(ComponentPrice(
             slot_key=comp.slot_key,
             item_name=resolved_name,
             quantity=comp.quantity,
             scales_with_quantity=slot["scales_with_quantity"],
+            unpriced=unpriced,
             **priced,
         ))
 

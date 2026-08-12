@@ -139,6 +139,10 @@ def logout():
     return redirect(url_for("login"))
 
 
+def _round_money(value):
+    return None if value is None else round(value, 2)
+
+
 def line_result_to_dict(result):
     return {
         "lines": [
@@ -146,10 +150,11 @@ def line_result_to_dict(result):
                 "slot_key": l.slot_key,
                 "item_name": l.item_name,
                 "quantity": l.quantity,
-                "material_price": round(l.material_price, 2),
-                "work_price": round(l.work_price, 2),
-                "line_total": round(l.line_total, 2),
+                "material_price": _round_money(None if l.unpriced else l.material_price),
+                "work_price": _round_money(None if l.unpriced else l.work_price),
+                "line_total": _round_money(l.line_total),
                 "scales_with_quantity": l.scales_with_quantity,
+                "unpriced": bool(l.unpriced),
             }
             for l in result.lines
         ],
@@ -414,17 +419,27 @@ def api_price_list_update_item():
     field = data.get("field")
     value = data.get("value")
 
+    try:
+        slot, resolved_name, _item = catalog.find_item(slot_key, item_name)
+    except PricingError as e:
+        return jsonify({"error": str(e)}), 400
+
+    if field == "unpriced":
+        # Explicit activate/deactivate. Clearing unpriced enables real quotes.
+        unpriced = bool(value)
+        if unpriced:
+            slot["items"][resolved_name]["unpriced"] = True
+        else:
+            slot["items"][resolved_name].pop("unpriced", None)
+        catalog.save()
+        return jsonify({"status": "saved", "unpriced": unpriced})
+
     if field not in EDITABLE_PRICE_LIST_FIELDS:
         return jsonify({"error": f"Field {field!r} can't be edited here."}), 400
     try:
         value = float(value)
     except (TypeError, ValueError):
         return jsonify({"error": "Value must be a number."}), 400
-
-    try:
-        slot, resolved_name, _item = catalog.find_item(slot_key, item_name)
-    except PricingError as e:
-        return jsonify({"error": str(e)}), 400
 
     slot["items"][resolved_name][field] = value
     catalog.save()
