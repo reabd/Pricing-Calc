@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 set :stage, :staging
-set :branch, 'main'
+set :branch, 'staging'
 
 append :linked_files, '.env.staging'
 
