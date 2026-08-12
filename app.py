@@ -454,6 +454,23 @@ def api_price_list_update_item():
         catalog.save()
         return jsonify({"status": "saved", "unpriced": unpriced})
 
+    if field == "opics_id":
+        opics_id = ("" if value is None else str(value)).strip()
+        if opics_id:
+            # One Okapics ID should map to at most one catalog item in this slot.
+            for name, rec in slot["items"].items():
+                if name == resolved_name:
+                    continue
+                if rec.get("opics_id", "").strip() == opics_id:
+                    return jsonify({
+                        "error": f"Okapics ID {opics_id!r} is already linked to {name!r}."
+                    }), 400
+            slot["items"][resolved_name]["opics_id"] = opics_id
+        else:
+            slot["items"][resolved_name].pop("opics_id", None)
+        catalog.save()
+        return jsonify({"status": "saved", "opics_id": opics_id or None})
+
     if field not in EDITABLE_PRICE_LIST_FIELDS:
         return jsonify({"error": f"Field {field!r} can't be edited here."}), 400
     try:

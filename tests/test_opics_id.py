@@ -156,6 +156,34 @@ class OpicsIdApiTests(unittest.TestCase):
         self.assertEqual(line["item_name"], "Alum linked")
         self.assertIsNotNone(line["line_total"])
 
+    def test_update_item_saves_opics_id_on_existing_row(self):
+        res = self.client.post(
+            "/api/price-list/update-item",
+            json={
+                "slot_key": "row23_profile_preset",
+                "item_name": "Box 1.5/4 simple",
+                "field": "opics_id",
+                "value": "profiloid_preset_framies[12][64]",
+            },
+        )
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
+        self.assertEqual(res.get_json()["opics_id"], "profiloid_preset_framies[12][64]")
+        item = flask_app.catalog.slots["row23_profile_preset"]["items"]["Box 1.5/4 simple"]
+        self.assertEqual(item["opics_id"], "profiloid_preset_framies[12][64]")
+
+        res_clear = self.client.post(
+            "/api/price-list/update-item",
+            json={
+                "slot_key": "row23_profile_preset",
+                "item_name": "Box 1.5/4 simple",
+                "field": "opics_id",
+                "value": "",
+            },
+        )
+        self.assertEqual(res_clear.status_code, 200, res_clear.get_data(as_text=True))
+        self.assertIsNone(res_clear.get_json()["opics_id"])
+        self.assertNotIn("opics_id", flask_app.catalog.slots["row23_profile_preset"]["items"]["Box 1.5/4 simple"])
+
 
 if __name__ == "__main__":
     unittest.main()

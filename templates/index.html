@@ -305,26 +305,14 @@
   button.enable-pricing:disabled { opacity: 0.5; cursor: default; }
   .pricelist-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
   .pricelist-toolbar label { font-size: 0.85rem; color: var(--ink-muted); cursor: pointer; user-select: none; }
-  .pricelist-link-opics {
-    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-inline-start: auto;
-    font-size: 0.85rem;
+  input.editable-opics-id {
+    width: 220px; max-width: 100%; font-family: "IBM Plex Mono", monospace; font-size: 0.78rem;
+    text-align: start; padding: 3px 6px; border-radius: var(--radius); border: 1px solid var(--line);
+    background: var(--paper); color: var(--ink);
   }
-  .pricelist-link-opics input[type="text"] {
-    min-width: 220px; padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--line);
-    font-family: "IBM Plex Mono", monospace; font-size: 0.82rem;
-  }
-  .pricelist-link-opics select {
-    padding: 4px 6px; border-radius: var(--radius); border: 1px solid var(--line); font-size: 0.82rem;
-  }
-  .pricelist-link-opics button {
-    font-family: inherit; font-size: 0.78rem; cursor: pointer; padding: 4px 10px;
-    border-radius: var(--radius); border: 1px solid var(--accent); background: transparent; color: var(--accent);
-  }
-  .pricelist-link-opics .link-opics-status { font-size: 0.78rem; color: var(--ink-muted); min-width: 80px; }
-  .badge-opics-id {
-    display: block; margin-top: 4px; font-size: 0.72rem; color: var(--ink-muted);
-    font-family: "IBM Plex Mono", monospace; word-break: break-all;
-  }
+  input.editable-opics-id:focus { border-color: var(--accent); outline: none; }
+  input.editable-opics-id.save-ok { border-color: #5a9c6e; background: color-mix(in srgb, #5a9c6e 12%, var(--paper)); }
+  input.editable-opics-id.save-error { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--paper)); }
 
   details { border-bottom: 1px solid var(--line); padding: 10px 0; }
   summary { cursor: pointer; font-weight: 500; font-size: 0.92rem; }
@@ -1070,15 +1058,6 @@ function renderPriceListTables(slots, el) {
   const showUnpricedOnly = !!(window.__priceListShowUnpricedOnly);
   let html = `<div class="pricelist-toolbar">
     <label><input type="checkbox" id="pricelist-unpriced-only" ${showUnpricedOnly ? 'checked' : ''}> Show unpriced only</label>
-    <div class="pricelist-link-opics">
-      <label for="pricelist-opics-slot">Link Okapics ID</label>
-      <select id="pricelist-opics-slot">
-        ${slots.map(s => `<option value="${s.key}"${s.key === 'row23_profile_preset' ? ' selected' : ''}>${s.label}</option>`).join('')}
-      </select>
-      <input type="text" id="pricelist-opics-id" placeholder="profiloid_preset_framies[123][64]">
-      <button type="button" id="pricelist-link-opics-btn">Link</button>
-      <span class="link-opics-status" id="pricelist-link-opics-status"></span>
-    </div>
   </div>`;
 
   for (const slot of slots) {
@@ -1088,18 +1067,19 @@ function renderPriceListTables(slots, el) {
     html += `<details${unpricedCount && showUnpricedOnly ? ' open' : ''}><summary>${slot.label} <span class="muted">(${slot.kind}, ${slot.size_mode}) — ${entries.length} item(s)`
       + (unpricedCount ? `, ${unpricedCount} unpriced` : '')
       + `</span></summary>`;
-    html += `<div class="table-wrap"><table><thead><tr><th>Item</th>`
+    html += `<div class="table-wrap"><table><thead><tr><th>Item</th><th>Okapics ID</th>`
       + PRICE_LIST_FIELDS.map(f => `<th class="num">${f.label}</th>`).join('')
       + `<th></th></tr></thead><tbody>`;
     for (const [name, item] of entries) {
       const unpriced = !!item.unpriced;
-      html += `<tr class="${unpriced ? 'unpriced-row' : ''}"><td>${name}`
+      const opicsId = item.opics_id || '';
+      html += `<tr class="${unpriced ? 'unpriced-row' : ''}"><td>${escapeHtml(name)}`
         + (unpriced ? ` <span class="badge-unpriced">Unpriced</span>` : '')
-        + (item.opics_id ? `<span class="badge-opics-id" title="Okapics ID">Okapics: ${item.opics_id}</span>` : '')
         + `</td>`
+        + `<td>${opicsIdCell(slot.key, name, opicsId)}</td>`
         + PRICE_LIST_FIELDS.map(f => editableCell(slot.key, name, f, item[f.field])).join('')
         + `<td>${unpriced
-            ? `<button type="button" class="enable-pricing" data-slot="${slot.key}" data-item="${name}">Enable pricing</button>`
+            ? `<button type="button" class="enable-pricing" data-slot="${slot.key}" data-item="${escapeHtml(name)}">Enable pricing</button>`
             : ''}</td></tr>`;
     }
     html += `</tbody></table></div></details>`;
@@ -1114,40 +1094,32 @@ function renderPriceListTables(slots, el) {
     });
   }
 
-  const linkBtn = document.getElementById('pricelist-link-opics-btn');
-  const linkStatus = document.getElementById('pricelist-link-opics-status');
-  const linkInput = document.getElementById('pricelist-opics-id');
-  const linkSlot = document.getElementById('pricelist-opics-slot');
-  if (linkBtn && linkInput && linkSlot) {
-    linkBtn.addEventListener('click', async () => {
-      const opicsId = linkInput.value.trim();
-      if (!opicsId) {
-        if (linkStatus) linkStatus.textContent = 'Enter an ID';
-        return;
-      }
-      linkBtn.disabled = true;
-      if (linkStatus) linkStatus.textContent = 'Linking…';
+  el.querySelectorAll('.editable-opics-id').forEach(input => {
+    input.addEventListener('change', async () => {
+      const {slot: slotKey, item: itemName} = input.dataset;
+      const value = input.value.trim();
+      input.classList.remove('save-ok', 'save-error');
       try {
-        const res = await fetch(API_BASE + '/api/price-list/link-opics-id', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({slot_key: linkSlot.value, opics_id: opicsId})
+        const res = await fetch(API_BASE + '/api/price-list/update-item', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({slot_key: slotKey, item_name: itemName, field: 'opics_id', value})
         });
         const data = await res.json();
-        if (data.error) {
-          if (linkStatus) linkStatus.textContent = data.error;
-        } else {
-          if (linkStatus) linkStatus.textContent = data.status === 'exists' ? 'Already linked' : 'Linked';
-          linkInput.value = '';
-          window.__pricelistLoaded = false;
-          loadPriceList();
+        input.classList.add(data.error ? 'save-error' : 'save-ok');
+        if (data.error) console.error(data.error);
+        else {
+          if (value) syncLocalPriceListField(slotKey, itemName, 'opics_id', value);
+          else {
+            const slot = (window.__priceListSlots || []).find(s => s.key === slotKey);
+            if (slot && slot.items[itemName]) delete slot.items[itemName].opics_id;
+          }
         }
       } catch (e) {
-        if (linkStatus) linkStatus.textContent = 'Failed';
+        input.classList.add('save-error');
       }
-      linkBtn.disabled = false;
-      setTimeout(() => { if (linkStatus) linkStatus.textContent = ''; }, 2500);
+      setTimeout(() => input.classList.remove('save-ok', 'save-error'), 1500);
     });
-  }
+  });
 
   el.querySelectorAll('.editable-field').forEach(input => {
     input.addEventListener('change', async () => {
@@ -1232,7 +1204,22 @@ function editableCell(slotKey, itemName, fieldDef, value) {
   const suffix = fieldDef.type === 'pct' ? '%' : '';
   const step = fieldDef.type === 'pct' ? '1' : '0.01';
   return `<td class="num"><input type="number" class="editable-field" step="${step}" value="${displayValue}" `
-    + `data-slot="${slotKey}" data-item="${itemName}" data-field="${fieldDef.field}" data-type="${fieldDef.type}">${suffix}</td>`;
+    + `data-slot="${escapeHtml(slotKey)}" data-item="${escapeHtml(itemName)}" data-field="${fieldDef.field}" data-type="${fieldDef.type}">${suffix}</td>`;
+}
+
+function opicsIdCell(slotKey, itemName, value) {
+  return `<td><input type="text" class="editable-opics-id" `
+    + `placeholder="profiloid_preset_framies[…][…]" `
+    + `value="${escapeHtml(value || '')}" `
+    + `data-slot="${escapeHtml(slotKey)}" data-item="${escapeHtml(itemName)}"></td>`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 </script>
 </body>
