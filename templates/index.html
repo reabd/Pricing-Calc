@@ -1075,7 +1075,7 @@ function renderPriceListTables(slots, el) {
       <select id="pricelist-opics-slot">
         ${slots.map(s => `<option value="${s.key}"${s.key === 'row23_profile_preset' ? ' selected' : ''}>${s.label}</option>`).join('')}
       </select>
-      <input type="text" id="pricelist-opics-id" placeholder="0.7/4.0 -12 white 027">
+      <input type="text" id="pricelist-opics-id" placeholder="profiloid_preset_framies[123][64]">
       <button type="button" id="pricelist-link-opics-btn">Link</button>
       <span class="link-opics-status" id="pricelist-link-opics-status"></span>
     </div>
