@@ -16,12 +16,14 @@ import email
 import imaplib
 import os
 import re
+from datetime import date, timedelta
 from email.header import decode_header
 from email.message import EmailMessage
 from email.utils import parseaddr, parsedate_to_datetime
 
 IMAP_HOST = "imap.gmail.com"
 REVIEWED_LABEL = "Claude/Reviewed"
+LEARNED_LABEL = "Claude/Learned"
 PRICE_QUOTE_LABEL = "הצעות מחיר למעקב"
 PRICE_QUOTE_OVER_4000_LABEL = "מעל 4000"
 
@@ -244,6 +246,121 @@ def _we_already_replied_after(conn, thread_id, after_date):
         return False
     finally:
         conn.select("INBOX")
+
+
+def _has_label(conn, uid, label):
+    typ, data = conn.uid("FETCH", uid, "(X-GM-LABELS)")
+    if typ != "OK" or not data or not data[0]:
+        return False
+    raw = data[0].decode("utf-8", errors="replace") if isinstance(data[0], bytes) else str(data[0])
+    return label in raw
+
+
+def mark_learned(uid):
+    """Applies LEARNED_LABEL to a [Gmail]/Sent Mail message so the learning
+    scan doesn't re-process the same real reply every cycle. Separate
+    short-lived connection, same pattern as mark_reviewed()."""
+    conn = _connect()
+    try:
+        conn.select('"[Gmail]/Sent Mail"')
+        conn.uid("STORE", uid, "+X-GM-LABELS", f'("{LEARNED_LABEL}")')
+    finally:
+        conn.logout()
+
+
+def _find_inbound_for_thread(conn, thread_id, before_date):
+    """Within the same Gmail thread, finds the INBOX message we were
+    actually replying to — the newest inbound message dated before
+    `before_date` (the reply's own send time). Returns a candidate dict
+    shaped like fetch_unanswered_inbox_emails()'s, or None."""
+    conn.select("INBOX")
+    typ, data = conn.uid("SEARCH", None, "X-GM-THRID", thread_id)
+    if typ != "OK" or not data or not data[0]:
+        return None
+
+    best = None
+    for uid in data[0].split():
+        typ, msg_data = conn.uid("FETCH", uid, "(BODY.PEEK[])")
+        if typ != "OK" or not msg_data or msg_data[0] is None:
+            continue
+        raw_email = msg_data[0][1]
+        msg = email.message_from_bytes(raw_email)
+        try:
+            msg_date = parsedate_to_datetime(msg.get("Date"))
+        except (TypeError, ValueError):
+            continue
+        if before_date and msg_date >= before_date:
+            continue
+        if best is None or msg_date > best[0]:
+            from_name, from_email = parseaddr(_decode(msg.get("From")))
+            best = (msg_date, {
+                "uid": uid.decode() if isinstance(uid, bytes) else uid,
+                "thread_id": thread_id,
+                "message_id": msg.get("Message-ID"),
+                "from_name": from_name,
+                "from_email": from_email,
+                "subject": _decode(msg.get("Subject")),
+                "date": msg_date,
+                "body": _plaintext_body(msg).strip()[:4000],
+            })
+    return best[1] if best else None
+
+
+def fetch_recently_answered_pairs(days=3, limit=25):
+    """
+    Finds real staff-sent replies from the last `days` days (skipping ones
+    already labeled LEARNED_LABEL) and pairs each with the inbound message
+    in the same Gmail thread it was actually answering — the raw material
+    for the "learn from what staff actually say" workflow (see
+    studio_operations_and_communication_notes.md §10). Returns a list of
+    {reply_uid, inbound, reply_body}; skips replies with no findable inbound
+    counterpart (e.g. a message staff sent that started a new thread).
+    """
+    conn = _connect()
+    try:
+        typ, _ = conn.select('"[Gmail]/Sent Mail"')
+        if typ != "OK":
+            return []
+        since_date = (date.today() - timedelta(days=days)).strftime("%d-%b-%Y")
+        typ, data = conn.uid("SEARCH", None, "SINCE", since_date)
+        if typ != "OK" or not data or not data[0]:
+            return []
+        uids = data[0].split()[-limit:]
+
+        pairs = []
+        for uid in uids:
+            conn.select('"[Gmail]/Sent Mail"')
+            if _has_label(conn, uid, LEARNED_LABEL):
+                continue
+
+            typ, msg_data = conn.uid("FETCH", uid, "(BODY.PEEK[] X-GM-THRID)")
+            if typ != "OK" or not msg_data or msg_data[0] is None:
+                continue
+            raw_headers = msg_data[0][0].decode("utf-8", errors="replace") if isinstance(msg_data[0], tuple) else ""
+            thrid_match = re.search(r"X-GM-THRID (\d+)", raw_headers)
+            thread_id = thrid_match.group(1) if thrid_match else None
+            if not thread_id:
+                continue
+
+            reply_msg = email.message_from_bytes(msg_data[0][1])
+            try:
+                reply_date = parsedate_to_datetime(reply_msg.get("Date"))
+            except (TypeError, ValueError):
+                reply_date = None
+            reply_body = _plaintext_body(reply_msg).strip()
+
+            inbound = _find_inbound_for_thread(conn, thread_id, reply_date)
+            if not inbound:
+                continue
+
+            pairs.append({
+                "reply_uid": uid.decode() if isinstance(uid, bytes) else uid,
+                "inbound": inbound,
+                "reply_body": reply_body[:4000],
+            })
+        return pairs
+    finally:
+        conn.logout()
 
 
 def append_draft_reply(original, reply_subject, reply_body):

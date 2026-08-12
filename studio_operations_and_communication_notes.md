@@ -773,3 +773,26 @@ every few minutes with the same App Password already needed for the rush-flag SM
   with inbox volume, not with genuinely-actionable email volume, since spam/newsletters still cost
   one API call each to correctly classify as "skip." Not addressed here; could add a cheap
   pre-filter (sender domain blocklist, etc.) later if volume/cost becomes a real concern.
+
+### Learning from real replies (added 2026-08-12)
+
+**The ask:** the studio owner wants the poller to keep improving on its own — reading every new
+client email *and* the real reply staff actually send, not just relying on this notes file staying
+manually up to date.
+
+Each poll cycle now also runs `email_learning.py`: `imap_client.fetch_recently_answered_pairs()`
+scans `[Gmail]/Sent Mail` for real staff-sent replies from the last few days, pairs each with the
+inbound client message in the same thread it was actually answering, and skips anything already
+labeled `Claude/Learned` (same reviewed-label pattern as the rest of the poller, applied to the sent
+message this time). For each new pair, `email_learning.extract_learnings()` asks Claude — with this
+entire notes file as context — to pull out only genuinely new, durable, reusable facts (never
+one-off details like a client's name or a custom price for one order); an empty result is the normal/
+expected outcome for most exchanges.
+
+Deliberately does **not** edit the sections above directly — anything extracted gets appended, with
+a citation, to a dedicated "§10. Auto-observed learnings (pending review)" section created
+automatically at the bottom of this file on first use. `email_ai.py`'s in-memory copy of this file is
+invalidated (`invalidate_notes_cache()`) right after a write, so a fresh learning is usable by the
+very next drafting decision in the same process, without a restart. The pending-review section is
+meant to be periodically skimmed by a human and folded into the real sections (or discarded) — it is
+not treated as settled policy on its own.

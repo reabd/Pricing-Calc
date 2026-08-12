@@ -27,6 +27,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 
 import business_rules
 import email_ai
+import email_learning
 import email_sender
 import imap_client
 import llm_parser
@@ -434,6 +435,15 @@ def _run_email_poller(interval_seconds):
     get re-judged, and re-billed, every single cycle). Never sends email —
     see imap_client.py and email_ai.py for what each half actually does.
 
+    Each cycle also runs a second, independent pass (see email_learning.py):
+    scans real staff-sent replies from the last few days, pairs each with
+    the client email it was answering, and asks Claude to extract any new
+    durable fact worth folding into the studio notes file — so future
+    drafting judgment keeps improving from what staff actually say, not
+    just from whatever was true when the notes were last hand-edited. Never
+    edits the notes file's real sections directly; appends to a clearly
+    marked "pending review" section instead (see notes §10).
+
     Runs as a daemon thread started at import time (not inside `if __name__
     == "__main__"`) so it also starts under gunicorn in production, which
     imports this module directly rather than running that block. Assumes a
@@ -481,6 +491,24 @@ def _run_email_poller(interval_seconds):
                     print(f"[email-poller] error on candidate {candidate.get('message_id')!r}: {e!r}", flush=True)
         except Exception as e:
             print(f"[email-poller] poll cycle failed: {e!r}", flush=True)
+
+        try:
+            pairs = imap_client.fetch_recently_answered_pairs()
+            for pair in pairs:
+                try:
+                    facts = email_learning.extract_learnings(pair["inbound"], pair["reply_body"])
+                    if facts:
+                        inbound = pair["inbound"]
+                        citation = f"{inbound.get('subject') or 'no subject'}, {inbound.get('date')}"
+                        email_learning.append_learnings(facts, citation)
+                        email_ai.invalidate_notes_cache()
+                        print(f"[email-learner] +{len(facts)} learning(s) from {inbound.get('subject')!r}: {facts}", flush=True)
+                    imap_client.mark_learned(pair["reply_uid"])
+                except Exception as e:
+                    print(f"[email-learner] error on reply {pair.get('reply_uid')!r}: {e!r}", flush=True)
+        except Exception as e:
+            print(f"[email-learner] scan failed: {e!r}", flush=True)
+
         time.sleep(interval_seconds)
 
 

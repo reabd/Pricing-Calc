@@ -43,6 +43,14 @@ def _studio_notes():
     return _notes_text
 
 
+def invalidate_notes_cache():
+    """Called after email_learning.py appends a new learning to the notes
+    file, so the next drafting decision in this same process picks it up
+    immediately instead of waiting for a restart."""
+    global _notes_text
+    _notes_text = None
+
+
 DECISION_TOOL = {
     "name": "submit_email_decision",
     "description": "Decide whether to draft a reply to this inbound client email, and draft it if so.",
