@@ -353,6 +353,32 @@ def api_order_status_flag_rush():
     return jsonify({"status": "sent", "to": FRAMING_TEAM_EMAIL})
 
 
+@app.route("/api/daily-report/send-now", methods=["GET", "POST"])
+def api_daily_report_send_now():
+    """
+    Manual trigger for daily_report.send_daily_report() — same report the
+    18:00 scheduler sends (see _run_daily_report_scheduler below), just
+    on-demand instead of waiting. GET is allowed too so it can be triggered
+    by opening a URL in a browser (protected by the same login/API-key gate
+    as every other /api/* route — see require_login above), not just POSTed.
+    Reads the real learning log on whatever machine this request lands on,
+    so it only reflects today's actual learnings when run against the
+    deployed instance, not a local dev server.
+    """
+    from datetime import datetime
+
+    recipient = request.args.get("to") or os.environ.get("DAILY_REPORT_RECIPIENT", "rea@theprinthouse.co.il")
+    today = datetime.now(daily_report.REPORT_TIMEZONE).date()
+    try:
+        daily_report.send_daily_report(today, recipient)
+    except email_sender.EmailError as e:
+        return jsonify({"error": str(e)}), 502
+    except Exception as e:
+        print(f"[daily-report] manual send failed: {e!r}", flush=True)
+        return jsonify({"error": f"Failed to send report: {e}"}), 500
+    return jsonify({"status": "sent", "to": recipient, "date": today.isoformat()})
+
+
 @app.route("/api/monday/webhook", methods=["POST"])
 def api_monday_webhook():
     """

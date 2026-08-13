@@ -844,6 +844,12 @@ Guarded behind `DAILY_REPORT_ENABLED=true` (off by default), with `DAILY_REPORT_
 design, an empty day still sends an email (studio owner's explicit choice, 2026-08-12) — a missing
 email is meant to read as "the automation broke," not "nothing happened."
 
+`/api/daily-report/send-now` (GET or POST, added 2026-08-12) — manual trigger for the same report,
+for whenever someone doesn't want to wait for 18:00. Behind the app's normal login/API-key gate, same
+as every other `/api/*` route (no special exemption). Only reflects real learnings when hit against
+the actual deployed instance — the learning log it reads lives wherever that process is running, not
+in this git checkout.
+
 ---
 
 ## 10. Auto-observed learnings (pending review)
