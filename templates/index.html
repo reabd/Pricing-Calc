@@ -303,8 +303,6 @@
   }
   button.enable-pricing:hover { background: color-mix(in srgb, var(--accent) 12%, var(--paper)); }
   button.enable-pricing:disabled { opacity: 0.5; cursor: default; }
-  .pricelist-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
-  .pricelist-toolbar label { font-size: 0.85rem; color: var(--ink-muted); cursor: pointer; user-select: none; }
   input.editable-opics-id {
     width: 200px; max-width: 28vw; min-width: 140px;
     font-family: "IBM Plex Mono", monospace; font-size: 0.78rem;
@@ -1057,18 +1055,12 @@ async function loadPriceList() {
 }
 
 function renderPriceListTables(slots, el) {
-  const showUnpricedOnly = !!(window.__priceListShowUnpricedOnly);
-  let html = `<div class="pricelist-toolbar">
-    <label><input type="checkbox" id="pricelist-unpriced-only" ${showUnpricedOnly ? 'checked' : ''}> Show unpriced only</label>
-  </div>`;
+  let html = '';
 
   for (const slot of slots) {
-    const entries = Object.entries(slot.items).filter(([, item]) => !showUnpricedOnly || item.unpriced);
+    const entries = Object.entries(slot.items);
     if (!entries.length) continue;
-    const unpricedCount = Object.values(slot.items).filter(i => i.unpriced).length;
-    html += `<details${unpricedCount && showUnpricedOnly ? ' open' : ''}><summary>${slot.label} <span class="muted">(${slot.kind}, ${slot.size_mode}) — ${entries.length} item(s)`
-      + (unpricedCount ? `, ${unpricedCount} unpriced` : '')
-      + `</span></summary>`;
+    html += `<details><summary>${slot.label} <span class="muted">(${slot.kind}, ${slot.size_mode}) — ${entries.length} item(s)</span></summary>`;
     html += `<div class="table-wrap"><table><thead><tr><th>Item</th><th>Okapics ID</th>`
       + PRICE_LIST_FIELDS.map(f => `<th class="num">${f.label}</th>`).join('')
       + `<th></th></tr></thead><tbody>`;
@@ -1087,14 +1079,6 @@ function renderPriceListTables(slots, el) {
     html += `</tbody></table></div></details>`;
   }
   el.innerHTML = html || '<div class="muted">No items match.</div>';
-
-  const filter = document.getElementById('pricelist-unpriced-only');
-  if (filter) {
-    filter.addEventListener('change', () => {
-      window.__priceListShowUnpricedOnly = filter.checked;
-      renderPriceListTables(window.__priceListSlots || [], el);
-    });
-  }
 
   el.querySelectorAll('.editable-opics-id').forEach(input => {
     input.addEventListener('change', async () => {
