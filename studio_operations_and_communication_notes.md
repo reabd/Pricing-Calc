@@ -850,6 +850,11 @@ as every other `/api/*` route (no special exemption). Only reflects real learnin
 the actual deployed instance — the learning log it reads lives wherever that process is running, not
 in this git checkout.
 
+**Skips Friday/Saturday (studio owner, 2026-08-13)** — the scheduler checks `target.weekday() in
+(4, 5)` and skips the send on those two days, matching the studio's actual Sun-Thu work week (§3).
+Deliberately only applies to the automatic 18:00 schedule; the manual `send-now` trigger above still
+works any day, since triggering it is itself an explicit choice.
+
 ---
 
 ## 10. Auto-observed learnings (pending review)

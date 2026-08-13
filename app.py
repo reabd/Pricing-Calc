@@ -709,6 +709,15 @@ def _run_daily_report_scheduler(recipient, hour, minute):
             target += timedelta(days=1)
         time.sleep((target - now).total_seconds())
 
+        # Studio is closed Fri/Sat (Israeli work week is Sun-Thu, see notes
+        # §3) — skip the scheduled send those days. date.weekday(): Mon=0
+        # ... Fri=4, Sat=5, Sun=6. The manual /api/daily-report/send-now
+        # trigger is deliberately NOT restricted by this — it's an explicit
+        # on-demand action, not the automatic schedule.
+        if target.weekday() in (4, 5):
+            print(f"[daily-report] skipped {target.date().isoformat()} (Fri/Sat, studio closed)", flush=True)
+            continue
+
         try:
             daily_report.send_daily_report(target.date(), recipient)
             print(f"[daily-report] sent for {target.date().isoformat()} to {recipient!r}", flush=True)
