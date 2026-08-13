@@ -303,8 +303,16 @@
   }
   button.enable-pricing:hover { background: color-mix(in srgb, var(--accent) 12%, var(--paper)); }
   button.enable-pricing:disabled { opacity: 0.5; cursor: default; }
-  .pricelist-toolbar { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; }
-  .pricelist-toolbar label { font-size: 0.85rem; color: var(--ink-muted); cursor: pointer; user-select: none; }
+  input.editable-opics-id {
+    width: 200px; max-width: 28vw; min-width: 140px;
+    font-family: "IBM Plex Mono", monospace; font-size: 0.78rem;
+    text-align: start; padding: 3px 6px; border-radius: var(--radius); border: 1px solid var(--line);
+    background: var(--paper); color: var(--ink);
+  }
+  td.opics-id-cell { white-space: nowrap; vertical-align: middle; }
+  input.editable-opics-id:focus { border-color: var(--accent); outline: none; }
+  input.editable-opics-id.save-ok { border-color: #5a9c6e; background: color-mix(in srgb, #5a9c6e 12%, var(--paper)); }
+  input.editable-opics-id.save-error { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--paper)); }
 
   details { border-bottom: 1px solid var(--line); padding: 10px 0; }
   summary { cursor: pointer; font-weight: 500; font-size: 0.92rem; }
@@ -1047,42 +1055,57 @@ async function loadPriceList() {
 }
 
 function renderPriceListTables(slots, el) {
-  const showUnpricedOnly = !!(window.__priceListShowUnpricedOnly);
-  let html = `<div class="pricelist-toolbar">
-    <label><input type="checkbox" id="pricelist-unpriced-only" ${showUnpricedOnly ? 'checked' : ''}> Show unpriced only</label>
-  </div>`;
+  let html = '';
 
   for (const slot of slots) {
-    const entries = Object.entries(slot.items).filter(([, item]) => !showUnpricedOnly || item.unpriced);
+    const entries = Object.entries(slot.items);
     if (!entries.length) continue;
-    const unpricedCount = Object.values(slot.items).filter(i => i.unpriced).length;
-    html += `<details${unpricedCount && showUnpricedOnly ? ' open' : ''}><summary>${slot.label} <span class="muted">(${slot.kind}, ${slot.size_mode}) — ${entries.length} item(s)`
-      + (unpricedCount ? `, ${unpricedCount} unpriced` : '')
-      + `</span></summary>`;
-    html += `<div class="table-wrap"><table><thead><tr><th>Item</th>`
+    html += `<details><summary>${slot.label} <span class="muted">(${slot.kind}, ${slot.size_mode}) — ${entries.length} item(s)</span></summary>`;
+    html += `<div class="table-wrap"><table><thead><tr><th>Item</th><th>Okapics ID</th>`
       + PRICE_LIST_FIELDS.map(f => `<th class="num">${f.label}</th>`).join('')
       + `<th></th></tr></thead><tbody>`;
     for (const [name, item] of entries) {
       const unpriced = !!item.unpriced;
-      html += `<tr class="${unpriced ? 'unpriced-row' : ''}"><td>${name}`
+      const opicsId = item.opics_id || '';
+      html += `<tr class="${unpriced ? 'unpriced-row' : ''}"><td>${escapeHtml(name)}`
         + (unpriced ? ` <span class="badge-unpriced">Unpriced</span>` : '')
         + `</td>`
+        + opicsIdCell(slot.key, name, opicsId)
         + PRICE_LIST_FIELDS.map(f => editableCell(slot.key, name, f, item[f.field])).join('')
         + `<td>${unpriced
-            ? `<button type="button" class="enable-pricing" data-slot="${slot.key}" data-item="${name}">Enable pricing</button>`
+            ? `<button type="button" class="enable-pricing" data-slot="${slot.key}" data-item="${escapeHtml(name)}">Enable pricing</button>`
             : ''}</td></tr>`;
     }
     html += `</tbody></table></div></details>`;
   }
   el.innerHTML = html || '<div class="muted">No items match.</div>';
 
-  const filter = document.getElementById('pricelist-unpriced-only');
-  if (filter) {
-    filter.addEventListener('change', () => {
-      window.__priceListShowUnpricedOnly = filter.checked;
-      renderPriceListTables(window.__priceListSlots || [], el);
+  el.querySelectorAll('.editable-opics-id').forEach(input => {
+    input.addEventListener('change', async () => {
+      const {slot: slotKey, item: itemName} = input.dataset;
+      const value = input.value.trim();
+      input.classList.remove('save-ok', 'save-error');
+      try {
+        const res = await fetch(API_BASE + '/api/price-list/update-item', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({slot_key: slotKey, item_name: itemName, field: 'opics_id', value})
+        });
+        const data = await res.json();
+        input.classList.add(data.error ? 'save-error' : 'save-ok');
+        if (data.error) console.error(data.error);
+        else {
+          if (value) syncLocalPriceListField(slotKey, itemName, 'opics_id', value);
+          else {
+            const slot = (window.__priceListSlots || []).find(s => s.key === slotKey);
+            if (slot && slot.items[itemName]) delete slot.items[itemName].opics_id;
+          }
+        }
+      } catch (e) {
+        input.classList.add('save-error');
+      }
+      setTimeout(() => input.classList.remove('save-ok', 'save-error'), 1500);
     });
-  }
+  });
 
   el.querySelectorAll('.editable-field').forEach(input => {
     input.addEventListener('change', async () => {
@@ -1167,7 +1190,22 @@ function editableCell(slotKey, itemName, fieldDef, value) {
   const suffix = fieldDef.type === 'pct' ? '%' : '';
   const step = fieldDef.type === 'pct' ? '1' : '0.01';
   return `<td class="num"><input type="number" class="editable-field" step="${step}" value="${displayValue}" `
-    + `data-slot="${slotKey}" data-item="${itemName}" data-field="${fieldDef.field}" data-type="${fieldDef.type}">${suffix}</td>`;
+    + `data-slot="${escapeHtml(slotKey)}" data-item="${escapeHtml(itemName)}" data-field="${fieldDef.field}" data-type="${fieldDef.type}">${suffix}</td>`;
+}
+
+function opicsIdCell(slotKey, itemName, value) {
+  return `<td class="opics-id-cell"><input type="text" class="editable-opics-id" `
+    + `placeholder="profiloid_preset_framies[…][…]" `
+    + `value="${escapeHtml(value || '')}" `
+    + `data-slot="${escapeHtml(slotKey)}" data-item="${escapeHtml(itemName)}"></td>`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 </script>
 </body>
