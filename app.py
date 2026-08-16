@@ -384,6 +384,19 @@ def api_daily_report_send_now():
     return jsonify({"status": "sent", "to": recipient, "date": today.isoformat()})
 
 
+@app.route("/api/studio-notes/raw")
+def api_studio_notes_raw():
+    """
+    Read-only: returns the live notes file's raw text — the actual copy
+    email_learning.py writes §10 entries into on whatever machine this
+    request lands on, which is NOT the git-committed copy (runtime writes
+    never get pushed back to git). Needed to actually review/clean up §10
+    against production reality instead of a stale local checkout. Same
+    login/API-key gate as everything else.
+    """
+    return jsonify({"text": email_learning.NOTES_PATH.read_text(encoding="utf-8")})
+
+
 @app.route("/api/monday/webhook", methods=["POST"])
 def api_monday_webhook():
     """
