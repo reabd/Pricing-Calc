@@ -622,6 +622,35 @@ def api_price_list_update_item():
     return jsonify({"status": "saved"})
 
 
+@app.route("/api/catalog/sync-new-items", methods=["POST"])
+def api_catalog_sync_new_items():
+    """
+    Copies any slot/preset that exists in the git-bundled pricing_data.json
+    but not in the live catalog (which, once PRICING_DATA_PATH points at a
+    persistent disk, never gets touched by a redeploy — see the seeding
+    comment above catalog = PricingCatalog(_data_path)). Adding a new
+    product line in code (a new slot/preset) does nothing on a deployment
+    with an existing persistent-disk file until this runs once.
+
+    Deliberately additive-only: never overwrites an existing slot/preset,
+    so hand-edited prices already live on the persistent disk are never
+    touched. Same login/API-key gate as the rest of the app.
+    """
+    bundled = PricingCatalog(_bundled_data_path)
+    added_slots, added_presets = [], []
+    for key, slot in bundled.slots.items():
+        if key not in catalog.slots:
+            catalog.slots[key] = slot
+            added_slots.append(key)
+    for key, preset in bundled.presets.items():
+        if key not in catalog.presets:
+            catalog.presets[key] = preset
+            added_presets.append(key)
+    if added_slots or added_presets:
+        catalog.save()
+    return jsonify({"added_slots": added_slots, "added_presets": added_presets})
+
+
 @app.route("/api/price-list/link-opics-id", methods=["POST"])
 def api_price_list_link_opics_id():
     data = request.json or {}
