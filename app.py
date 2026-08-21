@@ -625,30 +625,40 @@ def api_price_list_update_item():
 @app.route("/api/catalog/sync-new-items", methods=["GET", "POST"])
 def api_catalog_sync_new_items():
     """
-    Copies any slot/preset that exists in the git-bundled pricing_data.json
-    but not in the live catalog (which, once PRICING_DATA_PATH points at a
-    persistent disk, never gets touched by a redeploy — see the seeding
-    comment above catalog = PricingCatalog(_data_path)). Adding a new
-    product line in code (a new slot/preset) does nothing on a deployment
-    with an existing persistent-disk file until this runs once.
+    Copies any slot/preset/item that exists in the git-bundled
+    pricing_data.json but not in the live catalog (which, once
+    PRICING_DATA_PATH points at a persistent disk, never gets touched by a
+    redeploy — see the seeding comment above catalog = PricingCatalog(_data_path)).
+    Adding a new product line in code (a new slot/preset, or new items
+    within an already-synced slot — e.g. more UV Print materials) does
+    nothing on a deployment with an existing persistent-disk file until
+    this runs.
 
-    Deliberately additive-only: never overwrites an existing slot/preset,
-    so hand-edited prices already live on the persistent disk are never
-    touched. Same login/API-key gate as the rest of the app.
+    Deliberately additive-only at every level (new slots, new presets, AND
+    new items within an existing slot): never overwrites an existing
+    slot/preset/item, so hand-edited prices already live on the
+    persistent disk are never touched. Same login/API-key gate as the
+    rest of the app.
     """
     bundled = PricingCatalog(_bundled_data_path)
-    added_slots, added_presets = [], []
+    added_slots, added_presets, added_items = [], [], []
     for key, slot in bundled.slots.items():
         if key not in catalog.slots:
             catalog.slots[key] = slot
             added_slots.append(key)
+        else:
+            live_items = catalog.slots[key]["items"]
+            for item_name, item in slot["items"].items():
+                if item_name not in live_items:
+                    live_items[item_name] = item
+                    added_items.append(f"{key}:{item_name}")
     for key, preset in bundled.presets.items():
         if key not in catalog.presets:
             catalog.presets[key] = preset
             added_presets.append(key)
-    if added_slots or added_presets:
+    if added_slots or added_presets or added_items:
         catalog.save()
-    return jsonify({"added_slots": added_slots, "added_presets": added_presets})
+    return jsonify({"added_slots": added_slots, "added_presets": added_presets, "added_items": added_items})
 
 
 @app.route("/api/price-list/link-opics-id", methods=["POST"])
