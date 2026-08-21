@@ -622,7 +622,7 @@ def api_price_list_update_item():
     return jsonify({"status": "saved"})
 
 
-@app.route("/api/catalog/sync-new-items", methods=["POST"])
+@app.route("/api/catalog/sync-new-items", methods=["GET", "POST"])
 def api_catalog_sync_new_items():
     """
     Copies any slot/preset that exists in the git-bundled pricing_data.json
