@@ -34,6 +34,7 @@ import imap_client
 import llm_parser
 import monday_client
 import quote_reply
+import wood_frame_numbering
 from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, price_job
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -91,7 +92,7 @@ def _establish_api_key_session():
 
 @app.before_request
 def require_login():
-    if request.endpoint in ("login", "static", "api_monday_webhook", "auth_from_opics"):
+    if request.endpoint in ("login", "static", "api_monday_webhook", "api_wood_frames_webhook", "auth_from_opics"):
         return None
     if _api_key_authorized():
         return None
@@ -440,6 +441,37 @@ def api_monday_webhook():
             print(f"[monday-webhook] item {item_id}: Closing -> {target}", flush=True)
     except monday_client.MondayError as e:
         print(f"[monday-webhook] error for item {item_id}: {e}", flush=True)
+        return jsonify({"status": "error", "error": str(e)}), 502
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/wood-frames/webhook", methods=["POST"])
+def api_wood_frames_webhook():
+    """
+    Monday.com calls this whenever a new item is created on the Wood
+    Frames Orders board (webhook event create_item, registered separately
+    via wood_frame_numbering.register_webhook() — see
+    studio_operations_and_communication_notes.md §12). Auto-numbers the
+    new item starting from 1000, instead of leaving it as "New Item". Not
+    behind the app's login gate — see the exemption in require_login().
+    """
+    payload = request.json or {}
+
+    if "challenge" in payload:
+        return jsonify({"challenge": payload["challenge"]})
+
+    event = payload.get("event") or {}
+    item_id = event.get("pulseId")
+    if not item_id:
+        print(f"[wood-frames-webhook] ignored payload: {payload!r}"[:1000], flush=True)
+        return jsonify({"status": "ignored"})
+
+    try:
+        number = wood_frame_numbering.assign_next_number(item_id)
+        if number is not None:
+            print(f"[wood-frames-webhook] item {item_id} -> {number}", flush=True)
+    except monday_client.MondayError as e:
+        print(f"[wood-frames-webhook] error for item {item_id}: {e}", flush=True)
         return jsonify({"status": "error", "error": str(e)}), 502
     return jsonify({"status": "ok"})
 

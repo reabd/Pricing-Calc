@@ -857,6 +857,45 @@ works any day, since triggering it is itself an explicit choice.
 
 ---
 
+## 12. Wood Frames Orders auto-numbering (added 2026-08-21)
+
+**The ask:** the studio owner wanted new items on the separate "Wood Frames Orders" Monday board
+(id `9231845383` — a Square Island-branded workflow, distinct from the main Workshop board) to get
+an automatic sequential order number on creation instead of sitting as "New Item." The board's
+existing item names (`1666`, `1659`) turned out to be an unreliable "find the last number" source —
+a stray test/draft item briefly named `1234567` (created while debugging the DocExport PDF template,
+see below) made a naive max()-of-existing-names approach unsafe, and by the time this was built the
+board only had two real items left. **Decision: start a clean sequence at 1000 instead of trying to
+continue the old one.**
+
+`wood_frame_numbering.py`:
+- `assign_next_number(item_id)` — the only function that writes. Idempotency guard: only renames an
+  item if its name is still exactly Monday's own default (`"New Item"`) — if a duplicate webhook
+  delivery fires twice for the same creation, or a human already retyped the name before this ran,
+  it's a no-op rather than double-incrementing or clobbering a real name.
+- Persistent counter at `wood_frame_counter.json` next to the app by default, overridable via
+  `WOOD_FRAME_COUNTER_PATH` — same persistent-disk convention as `PRICING_DATA_PATH` /
+  `LEARNING_LOG_PATH`, since the git checkout itself resets on every redeploy.
+- `register_webhook(callback_url)` — one-time setup (not called at import/deploy time); registers a
+  `create_item` event webhook on the board, pointed at `/api/wood-frames/webhook`.
+
+`app.py`'s `/api/wood-frames/webhook` mirrors the existing `/api/monday/webhook` pattern exactly
+(challenge handshake, exempted from the login gate, logs and ignores payload shapes it doesn't
+recognize) — see §8 for why that pattern looks the way it does.
+
+### Side note: the DocExport PDF template had a real bug this session
+While debugging why the newly-added **הערות** (notes) column wasn't showing up in a generated PDF,
+found that the "DocExport" app's template editor had accumulated a large pile of near-duplicate
+templates (`SQ Wood Frame Template-2` through `-13`, plus `SQ Wood Frame Template123`) — almost
+certainly the editor auto-saving a new copy on each edit instead of updating in place. The board's
+real "Generate PDF" button stays bound to whichever template it was originally configured with
+(`SQ Wood Frame Template`, no suffix), so edits made to a duplicate silently don't show up in the
+real output. Fixed by editing the original template directly. **Not yet cleaned up**: the pile of
+stray duplicate templates is still sitting in the dropdown — offered to walk the owner through
+deleting them, not done as of this writing.
+
+---
+
 ## 10. Auto-observed learnings (pending review)
 
 Facts auto-extracted by the background poller from real client emails and the studio's actual replies (see §9). Not yet reviewed or folded into the sections above — treat as a candidate list, not settled policy.
