@@ -634,14 +634,16 @@ def api_catalog_sync_new_items():
     nothing on a deployment with an existing persistent-disk file until
     this runs.
 
-    Deliberately additive-only at every level (new slots, new presets, AND
-    new items within an existing slot): never overwrites an existing
-    slot/preset/item, so hand-edited prices already live on the
-    persistent disk are never touched. Same login/API-key gate as the
+    Slots/items are additive-only: never overwrites an existing
+    slot/item, so hand-edited prices already live on the persistent disk
+    (via the Price List tab) are never touched. Presets are different —
+    there is no UI path to hand-edit a preset's component list, so a
+    changed preset is safe to sync outright (updated_presets) rather than
+    only adding brand-new preset keys. Same login/API-key gate as the
     rest of the app.
     """
     bundled = PricingCatalog(_bundled_data_path)
-    added_slots, added_presets, added_items = [], [], []
+    added_slots, added_items = [], []
     for key, slot in bundled.slots.items():
         if key not in catalog.slots:
             catalog.slots[key] = slot
@@ -652,13 +654,20 @@ def api_catalog_sync_new_items():
                 if item_name not in live_items:
                     live_items[item_name] = item
                     added_items.append(f"{key}:{item_name}")
+    added_presets, updated_presets = [], []
     for key, preset in bundled.presets.items():
         if key not in catalog.presets:
             catalog.presets[key] = preset
             added_presets.append(key)
-    if added_slots or added_presets or added_items:
+        elif catalog.presets[key].get("components") != preset.get("components"):
+            catalog.presets[key] = preset
+            updated_presets.append(key)
+    if added_slots or added_presets or added_items or updated_presets:
         catalog.save()
-    return jsonify({"added_slots": added_slots, "added_presets": added_presets, "added_items": added_items})
+    return jsonify({
+        "added_slots": added_slots, "added_items": added_items,
+        "added_presets": added_presets, "updated_presets": updated_presets,
+    })
 
 
 @app.route("/api/price-list/link-opics-id", methods=["POST"])
