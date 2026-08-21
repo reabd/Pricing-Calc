@@ -598,8 +598,7 @@ function renderOptionGroups(variant) {
   const onBackFrameCard = BACK_FRAME_CARDS.includes(selectedPreset);
   backFrameCheckbox.checked = backFrameChecked;
   if (onBackFrameCard && !backFrameChecked) {
-    customOverrides['row31_back_frame'] = null;
-    customOverrides['row32_simple_wrap'] = null;
+    customOverrides['row31_back_frame'] = null; // Simple Wrap stays regardless — it's not tied to Back Frame
   }
   backFrameRow.style.display = onBackFrameCard ? 'flex' : 'none';
 
@@ -658,13 +657,12 @@ document.getElementById('back-frame-check').addEventListener('change', (e) => {
   backFrameChecked = e.target.checked;
   if (backFrameChecked) {
     delete customOverrides['row31_back_frame'];
-    delete customOverrides['row32_simple_wrap'];
   } else {
     // item_name: null tells the backend to remove this component from
     // the preset's defaults entirely, same convention as the "No Print"
-    // pill option.
+    // pill option. Simple Wrap is intentionally left alone — it stays
+    // whether or not Back Frame is checked (studio owner, 2026-08-21).
     customOverrides['row31_back_frame'] = null;
-    customOverrides['row32_simple_wrap'] = null;
   }
   if (currentJob) performCalculation(); // already showing a result — refresh it live
 });
