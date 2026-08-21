@@ -2874,6 +2874,72 @@
           "effort_profit": 0.3
         }
       }
+    },
+    {
+      "key": "row33_uv_print",
+      "row": 33,
+      "kind": "dropdown",
+      "product": "UV Printer",
+      "category": "Direct Print",
+      "subcategory": "UV Substrate",
+      "label": "UV Print Material",
+      "size_mode": "area",
+      "scales_with_quantity": true,
+      "default_item": "Dibond 3mm (UV Print)",
+      "items": {
+        "Dibond 3mm (UV Print)": {
+          "fixed_material_cost": 0,
+          "var_material_cost": 106,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "PVC 3mm (UV Print)": {
+          "fixed_material_cost": 0,
+          "var_material_cost": 86,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "KapaLine 5mm (UV Print)": {
+          "fixed_material_cost": 0,
+          "var_material_cost": 76,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "Acrylic 3mm (UV Print)": {
+          "fixed_material_cost": 0,
+          "var_material_cost": 155,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        }
+      }
     }
   ],
   "presets": [
@@ -3325,6 +3391,18 @@
         {
           "slot_key": "row32_simple_wrap",
           "item_name": "Simple Wrap"
+        }
+      ],
+      "unsupported_rows": []
+    },
+    {
+      "key": "uv_print",
+      "macro_name": "UVPrint",
+      "label": "UV Print",
+      "components": [
+        {
+          "slot_key": "row33_uv_print",
+          "item_name": "Dibond 3mm (UV Print)"
         }
       ],
       "unsupported_rows": []
