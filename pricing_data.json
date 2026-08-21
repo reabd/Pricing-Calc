@@ -2926,19 +2926,6 @@
           "effort_risk": 0.45,
           "effort_profit": 0.3
         },
-        "Acrylic 3mm (UV Print)": {
-          "fixed_material_cost": 0,
-          "var_material_cost": 155,
-          "var_effort_cost": 25,
-          "fixed_effort_cost": 0,
-          "min_effort_cost": 15,
-          "material_indirect": 0.5,
-          "material_risk": 0.3,
-          "material_profit": 0.3,
-          "effort_indirect": 0.5,
-          "effort_risk": 0.45,
-          "effort_profit": 0.3
-        },
         "Conservation Board 4 ply (UV Print)": {
           "fixed_material_cost": 0,
           "var_material_cost": 73,

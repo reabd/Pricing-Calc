@@ -670,6 +670,45 @@ def api_catalog_sync_new_items():
     })
 
 
+@app.route("/api/catalog/delete-item", methods=["GET", "POST"])
+def api_catalog_delete_item():
+    """
+    Removes a single item from a slot on the live catalog. Needed for the
+    same reason sync-new-items exists — the live catalog on a deployment
+    with PRICING_DATA_PATH set lives on a persistent disk, so removing an
+    item from the git-bundled pricing_data.json doesn't by itself remove
+    it from production. sync-new-items is deliberately additive-only, so
+    deletion needs its own explicit, narrow endpoint rather than being
+    folded into it.
+
+    Refuses to delete a slot's default_item or an item any preset still
+    references as a default component, so this can't silently break an
+    existing preset — those need to be repointed first. Same login/API-key
+    gate as the rest of the app.
+    """
+    slot_key = request.args.get("slot_key")
+    item_name = request.args.get("item_name")
+    if not slot_key or not item_name:
+        return jsonify({"error": "slot_key and item_name are required."}), 400
+    try:
+        slot = catalog.get_slot(slot_key)
+    except PricingError as e:
+        return jsonify({"error": str(e)}), 404
+    if item_name not in slot["items"]:
+        return jsonify({"error": f"{item_name!r} not found in slot {slot_key!r}."}), 404
+    if slot.get("default_item") == item_name:
+        return jsonify({"error": f"{item_name!r} is the slot's default_item — repoint that first."}), 400
+    referencing_presets = [
+        p["key"] for p in catalog.presets.values()
+        if any(c["slot_key"] == slot_key and c["item_name"] == item_name for c in p["components"])
+    ]
+    if referencing_presets:
+        return jsonify({"error": f"Still used by preset(s) {referencing_presets} — update those first."}), 400
+    del slot["items"][item_name]
+    catalog.save()
+    return jsonify({"status": "deleted", "slot_key": slot_key, "item_name": item_name})
+
+
 @app.route("/api/price-list/link-opics-id", methods=["POST"])
 def api_price_list_link_opics_id():
     data = request.json or {}
