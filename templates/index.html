@@ -344,6 +344,9 @@
       <label class="quick-checkbox" id="art-glass-row" style="display:none;">
         <input type="checkbox" id="art-glass-check"> <span id="art-glass-label-text">Art Glass 70%</span>
       </label>
+      <label class="quick-checkbox" id="back-frame-row" style="display:none;">
+        <input type="checkbox" id="back-frame-check"> <span>Back Frame</span>
+      </label>
       <div id="options-groups"></div>
       <div class="measure-row">
         <div class="field">
@@ -570,6 +573,13 @@ const ART_GLASS_CARDS = ['box', 'aluminium'];
 // Box/Aluminium and their +Print/+Drawing/+Passpartout variants.
 let artGlassChecked = false;
 
+// Cards where Back Frame + Simple Wrap are part of the preset by default,
+// but removable via a checkbox (e.g. UV Print on a substrate that's
+// already rigid enough not to need one).
+const BACK_FRAME_CARDS = ['uv_print'];
+// Defaults to true — "the default is with back frame" (studio owner).
+let backFrameChecked = true;
+
 function renderOptionGroups(variant) {
   customOverrides = {};
 
@@ -582,6 +592,16 @@ function renderOptionGroups(variant) {
   }
   document.getElementById('art-glass-label-text').textContent = 'Art Glass 70%';
   artGlassRow.style.display = onArtGlassCard ? 'flex' : 'none';
+
+  const backFrameRow = document.getElementById('back-frame-row');
+  const backFrameCheckbox = document.getElementById('back-frame-check');
+  const onBackFrameCard = BACK_FRAME_CARDS.includes(selectedPreset);
+  backFrameCheckbox.checked = backFrameChecked;
+  if (onBackFrameCard && !backFrameChecked) {
+    customOverrides['row31_back_frame'] = null;
+    customOverrides['row32_simple_wrap'] = null;
+  }
+  backFrameRow.style.display = onBackFrameCard ? 'flex' : 'none';
 
   const container = document.getElementById('options-groups');
   container.innerHTML = '';
@@ -630,6 +650,21 @@ document.getElementById('art-glass-check').addEventListener('change', (e) => {
     customOverrides['row24_glasses'] = 'Art Glass 70%';
   } else {
     delete customOverrides['row24_glasses'];
+  }
+  if (currentJob) performCalculation(); // already showing a result — refresh it live
+});
+
+document.getElementById('back-frame-check').addEventListener('change', (e) => {
+  backFrameChecked = e.target.checked;
+  if (backFrameChecked) {
+    delete customOverrides['row31_back_frame'];
+    delete customOverrides['row32_simple_wrap'];
+  } else {
+    // item_name: null tells the backend to remove this component from
+    // the preset's defaults entirely, same convention as the "No Print"
+    // pill option.
+    customOverrides['row31_back_frame'] = null;
+    customOverrides['row32_simple_wrap'] = null;
   }
   if (currentJob) performCalculation(); // already showing a result — refresh it live
 });

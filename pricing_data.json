@@ -3468,6 +3468,14 @@
         {
           "slot_key": "row33_uv_print",
           "item_name": "Dibond 3mm (UV Print)"
+        },
+        {
+          "slot_key": "row31_back_frame",
+          "item_name": "Medium"
+        },
+        {
+          "slot_key": "row32_simple_wrap",
+          "item_name": "Simple Wrap"
         }
       ],
       "unsupported_rows": []
