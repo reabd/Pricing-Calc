@@ -32,6 +32,7 @@ import email_learning
 import email_sender
 import imap_client
 import llm_parser
+import item_numbering
 import monday_client
 import quote_reply
 import wood_frame_numbering
@@ -92,7 +93,8 @@ def _establish_api_key_session():
 
 @app.before_request
 def require_login():
-    if request.endpoint in ("login", "static", "api_monday_webhook", "api_wood_frames_webhook", "auth_from_opics"):
+    if request.endpoint in ("login", "static", "api_monday_webhook", "api_wood_frames_webhook",
+                             "api_item_numbering_webhook", "auth_from_opics"):
         return None
     if _api_key_authorized():
         return None
@@ -492,6 +494,52 @@ def api_wood_frames_webhook():
         print(f"[wood-frames-webhook] error for item {item_id}: {e}", flush=True)
         return jsonify({"status": "error", "error": str(e)}), 502
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/item-numbering/webhook/<board_id>", methods=["POST"])
+def api_item_numbering_webhook(board_id):
+    """
+    Same idea as api_wood_frames_webhook, generalized across boards (see
+    item_numbering.py) — currently Aluminum Orders (starts at 2000) and
+    Passepartout Orders (starts at 3000). Each board gets its own webhook
+    subscription pointed at this same route with its board_id in the URL,
+    rather than trying to parse boardId out of Monday's event payload —
+    simpler and doesn't depend on Monday's exact payload shape.
+    """
+    payload = request.json or {}
+
+    if "challenge" in payload:
+        return jsonify({"challenge": payload["challenge"]})
+
+    event = payload.get("event") or {}
+    item_id = event.get("pulseId")
+    if not item_id:
+        print(f"[item-numbering-webhook] board {board_id} ignored payload: {payload!r}"[:1000], flush=True)
+        return jsonify({"status": "ignored"})
+
+    try:
+        number = item_numbering.assign_next_number(board_id, item_id)
+        if number is not None:
+            print(f"[item-numbering-webhook] board {board_id} item {item_id} -> {number}", flush=True)
+    except monday_client.MondayError as e:
+        print(f"[item-numbering-webhook] error for item {item_id}: {e}", flush=True)
+        return jsonify({"status": "error", "error": str(e)}), 502
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/item-numbering/counter/<board_id>", methods=["GET", "POST"])
+def api_item_numbering_counter(board_id):
+    """GET returns the current next-number value for that board; POST with
+    ?value=N resets it. Same login/API-key gate as the rest of the app."""
+    if board_id not in item_numbering.BOARDS:
+        return jsonify({"error": f"Unknown board_id {board_id!r}"}), 404
+    if request.method == "GET":
+        return jsonify({"board": item_numbering.BOARDS[board_id]["name"], "next": item_numbering._read_next(board_id)})
+    value = request.args.get("value")
+    if not value or not value.isdigit():
+        return jsonify({"error": "Pass ?value=<integer>"}), 400
+    item_numbering._write_next(board_id, int(value))
+    return jsonify({"board": item_numbering.BOARDS[board_id]["name"], "next": item_numbering._read_next(board_id)})
 
 
 @app.route("/api/price-list")

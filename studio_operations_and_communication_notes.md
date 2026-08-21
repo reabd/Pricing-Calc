@@ -896,6 +896,29 @@ deleting them, not done as of this writing.
 
 ---
 
+## 13. Auto-numbering extended to Aluminum Orders and Passepartout Orders (2026-08-21)
+
+Same mechanism as §12, generalized in `item_numbering.py` rather than copy-pasting
+`wood_frame_numbering.py` a second and third time (that original module stays as its own
+already-verified thing, untouched):
+
+- **Aluminum Orders** (board `9391960224`) — starts at **2000**.
+- **Passepartout Orders** (board `9310147481`) — starts at **3000**.
+
+Each board gets its own `create_item` webhook subscription, all pointed at the same route,
+`/api/item-numbering/webhook/<board_id>` — the board_id comes from the URL path rather than being
+parsed out of Monday's event payload, so this doesn't depend on Monday's exact payload shape
+including a `boardId` field. `/api/item-numbering/counter/<board_id>` (GET/POST, same login/API-key
+gate as the rest of the app) reads or resets a board's counter — needed the same way §12's
+`/api/wood-frames/counter` was: whoever runs this locally has no filesystem access to wherever the
+webhook handler actually executes (Render), so a local script can't just edit the counter file
+directly.
+
+To add a fourth board later: add an entry to `item_numbering.BOARDS`, deploy, then call
+`item_numbering.register_webhook(board_id, callback_url)` once the route is confirmed live.
+
+---
+
 ## 10. Auto-observed learnings (pending review)
 
 Facts auto-extracted by the background poller from real client emails and the studio's actual replies (see §9). Not yet reviewed or folded into the sections above — treat as a candidate list, not settled policy.
