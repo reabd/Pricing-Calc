@@ -917,6 +917,14 @@ directly.
 To add a fourth board later: add an entry to `item_numbering.BOARDS`, deploy, then call
 `item_numbering.register_webhook(board_id, callback_url)` once the route is confirmed live.
 
+**Bug found and fixed same day**: real UI-created items got skipped entirely — the idempotency guard
+compared against `"New Item"` (capital I), but Monday's actual default name for a UI-clicked new item
+is `"New item"` (lowercase i). Testing via the API happened to use `item_name: "New Item"` for the
+test items, which matched the wrong casing exactly, so the bug passed every test and only showed up
+on the first real click. Fixed to a case-insensitive comparison in both `wood_frame_numbering.py` and
+`item_numbering.py`. Lesson for next time: don't create API test items with a hand-typed name that
+happens to match what the code expects — create them the same way (or check) a real UI click would.
+
 ---
 
 ## 10. Auto-observed learnings (pending review)

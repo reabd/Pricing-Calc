@@ -21,7 +21,7 @@ import monday_client
 WOOD_FRAMES_BOARD_ID = "9231845383"
 # Monday's own placeholder name for a freshly-created item -- used as the
 # idempotency guard (see assign_next_number).
-DEFAULT_ITEM_NAME = "New Item"
+DEFAULT_ITEM_NAME = "New item"
 START_NUMBER = 1000
 
 # Same PRICING_DATA_PATH/LEARNING_LOG_PATH convention: point this at a
@@ -60,7 +60,11 @@ def assign_next_number(item_id):
     query = f"query {{ items(ids: [{int(item_id)}]) {{ name }} }}"
     data = monday_client._graphql(query)
     items = data.get("items") or []
-    if not items or items[0]["name"] != DEFAULT_ITEM_NAME:
+    # Case-insensitive: Monday's real UI-created default is "New item"
+    # (lowercase i), not "New Item" -- an earlier version of this check
+    # used the wrong casing and silently skipped every real click while
+    # passing on API-created test items that happened to match exactly.
+    if not items or items[0]["name"].strip().lower() != DEFAULT_ITEM_NAME.lower():
         return None
 
     number = _read_next()

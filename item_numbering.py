@@ -12,7 +12,7 @@ from pathlib import Path
 
 import monday_client
 
-DEFAULT_ITEM_NAME = "New Item"  # Monday's own placeholder for a freshly-created item
+DEFAULT_ITEM_NAME = "New item"  # Monday's own placeholder for a freshly-created item
 
 # board_id -> (starting number, env var for a persistent counter path,
 # default local filename). Add a new board here + register its webhook to
@@ -60,7 +60,10 @@ def assign_next_number(board_id, item_id):
     query = f"query {{ items(ids: [{int(item_id)}]) {{ name }} }}"
     data = monday_client._graphql(query)
     items = data.get("items") or []
-    if not items or items[0]["name"] != DEFAULT_ITEM_NAME:
+    # Case-insensitive: Monday's real UI-created default is "New item"
+    # (lowercase i), not "New Item" -- see the identical note in
+    # wood_frame_numbering.py, where this exact bug was first found.
+    if not items or items[0]["name"].strip().lower() != DEFAULT_ITEM_NAME.lower():
         return None
 
     number = _read_next(board_id)
