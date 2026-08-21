@@ -3005,6 +3005,72 @@
           "effort_profit": 0.3
         }
       }
+    },
+    {
+      "key": "row34_uv_facemount",
+      "row": 34,
+      "kind": "dropdown",
+      "product": "UV Printer",
+      "category": "Direct Print",
+      "subcategory": "UV Facemount Finish",
+      "label": "UV Facemount Finish",
+      "size_mode": "area",
+      "scales_with_quantity": true,
+      "default_item": "Acrylic Glossy 2mm (UV Facemount)",
+      "items": {
+        "Acrylic Glossy 2mm (UV Facemount)": {
+          "fixed_material_cost": 10,
+          "var_material_cost": 135.5855072463768,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "Acrylic Glossy 3mm (UV Facemount)": {
+          "fixed_material_cost": 10,
+          "var_material_cost": 154.99469777306467,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "Acrylic Matt (UV Facemount)": {
+          "fixed_material_cost": 10,
+          "var_material_cost": 175,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "Acrylic True Life (UV Facemount)": {
+          "fixed_material_cost": 10,
+          "var_material_cost": 580,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        }
+      }
     }
   ],
   "presets": [
@@ -3468,6 +3534,30 @@
         {
           "slot_key": "row33_uv_print",
           "item_name": "Dibond 3mm (UV Print)"
+        },
+        {
+          "slot_key": "row31_back_frame",
+          "item_name": "Medium"
+        },
+        {
+          "slot_key": "row32_simple_wrap",
+          "item_name": "Simple Wrap"
+        }
+      ],
+      "unsupported_rows": []
+    },
+    {
+      "key": "uv_facemount",
+      "macro_name": "UVFacemount",
+      "label": "UV Facemount",
+      "components": [
+        {
+          "slot_key": "row34_uv_facemount",
+          "item_name": "Acrylic Glossy 2mm (UV Facemount)"
+        },
+        {
+          "slot_key": "row30_back_material",
+          "item_name": "Dibond 3mm Facemount"
         },
         {
           "slot_key": "row31_back_frame",
