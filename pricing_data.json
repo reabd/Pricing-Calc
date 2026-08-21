@@ -2938,6 +2938,71 @@
           "effort_indirect": 0.5,
           "effort_risk": 0.45,
           "effort_profit": 0.3
+        },
+        "Conservation Board 4 ply (UV Print)": {
+          "fixed_material_cost": 0,
+          "var_material_cost": 73,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "Conservation Board 8 ply (UV Print)": {
+          "fixed_material_cost": 0,
+          "var_material_cost": 106,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "Aluminium Board (UV Print)": {
+          "fixed_material_cost": 0,
+          "var_material_cost": 130,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "Livne Board 1.2 (UV Print)": {
+          "fixed_material_cost": 0,
+          "var_material_cost": 75,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
+        },
+        "Livne Board 1.6 (UV Print)": {
+          "fixed_material_cost": 0,
+          "var_material_cost": 90,
+          "var_effort_cost": 25,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 15,
+          "material_indirect": 0.5,
+          "material_risk": 0.3,
+          "material_profit": 0.3,
+          "effort_indirect": 0.5,
+          "effort_risk": 0.45,
+          "effort_profit": 0.3
         }
       }
     }
