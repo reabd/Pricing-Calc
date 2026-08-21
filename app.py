@@ -445,6 +445,24 @@ def api_monday_webhook():
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/wood-frames/counter", methods=["GET", "POST"])
+def api_wood_frames_counter():
+    """
+    GET returns the current next-number value; POST with ?value=N resets
+    it. Needed because the counter lives on whatever machine is actually
+    running the webhook handler (Render), which this local shell has no
+    filesystem access to — see wood_frame_numbering.py. Same login/API-key
+    gate as every other non-webhook /api/* route.
+    """
+    if request.method == "GET":
+        return jsonify({"next": wood_frame_numbering._read_next()})
+    value = request.args.get("value")
+    if not value or not value.isdigit():
+        return jsonify({"error": "Pass ?value=<integer>"}), 400
+    wood_frame_numbering._write_next(int(value))
+    return jsonify({"next": wood_frame_numbering._read_next()})
+
+
 @app.route("/api/wood-frames/webhook", methods=["POST"])
 def api_wood_frames_webhook():
     """
