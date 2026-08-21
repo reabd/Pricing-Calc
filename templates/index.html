@@ -717,11 +717,13 @@ function renderQuickQuoteResult(q) {
 
   resultEl.querySelectorAll('.line-edit').forEach(select => {
     select.addEventListener('change', () => {
-      const components = q.lines.map(l => ({
-        slot_key: l.slot_key,
-        item_name: l.slot_key === select.dataset.slot ? select.value : l.item_name,
-      }));
-      recalcQuickQuote(components);
+      // Write into customOverrides (not a one-off request) so this choice
+      // survives later recalculations triggered by something else, e.g.
+      // toggling Art Glass 70% — performCalculation() rebuilds every
+      // request purely from customOverrides, so a change that bypassed it
+      // would silently revert on the next unrelated recalculation.
+      customOverrides[select.dataset.slot] = select.value;
+      if (currentJob) performCalculation();
     });
   });
 
@@ -786,10 +788,6 @@ function performCalculation() {
   Object.entries(customOverrides).forEach(([slot_key, item_name]) => { merged[slot_key] = item_name; });
   const overrideComponents = Object.entries(merged).map(([slot_key, item_name]) => ({slot_key, item_name}));
   fetchAndRenderQuote(selectedVariantObj.key, overrideComponents);
-}
-
-function recalcQuickQuote(components) {
-  fetchAndRenderQuote(null, components);
 }
 
 function handleCalculateClick() {
