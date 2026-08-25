@@ -20,10 +20,11 @@ import shutil
 import threading
 import time
 from datetime import timedelta
+from io import BytesIO
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
 
 import business_rules
 import daily_report
@@ -34,7 +35,9 @@ import imap_client
 import llm_parser
 import item_numbering
 import monday_client
+import quote_pdf
 import quote_reply
+import quote_store
 import wood_frame_numbering
 from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, price_job
 
@@ -270,6 +273,62 @@ def api_quote_structured():
         return jsonify(price_parsed_lines(lines))
     except PricingError as e:
         return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/quotes", methods=["GET", "POST"])
+def api_quotes():
+    """
+    POST saves a new client price quote — the "Add to Quote" cart's
+    accumulated work items (already-priced, same shape price_parsed_lines()
+    returns) plus a client name. Assigns the next sequential quote number
+    (see quote_store.py) and persists it.
+
+    GET lists saved quotes, optionally filtered with ?client=<substring>
+    (case-insensitive, matches anywhere in the client name) — powers the
+    Quote History view.
+    """
+    if request.method == "GET":
+        return jsonify({"quotes": quote_store.list_quotes(request.args.get("client"))})
+
+    data = request.json or {}
+    work_items = data.get("work_items") or []
+    try:
+        quote = quote_store.create_quote(
+            client_name=data.get("client_name", ""),
+            client_phone=data.get("client_phone"),
+            client_email=data.get("client_email"),
+            work_items=work_items,
+            vat_rate=catalog.vat_rate,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(quote)
+
+
+@app.route("/api/quotes/clients")
+def api_quotes_clients():
+    """Distinct client names across all saved quotes — powers the client-name autocomplete."""
+    return jsonify({"clients": quote_store.list_client_names()})
+
+
+@app.route("/api/quotes/<int:quote_number>")
+def api_quote_detail(quote_number):
+    quote = quote_store.get_quote(quote_number)
+    if not quote:
+        return jsonify({"error": f"Quote #{quote_number} not found."}), 404
+    return jsonify(quote)
+
+
+@app.route("/api/quotes/<int:quote_number>/pdf")
+def api_quote_pdf(quote_number):
+    quote = quote_store.get_quote(quote_number)
+    if not quote:
+        return jsonify({"error": f"Quote #{quote_number} not found."}), 404
+    pdf_bytes = quote_pdf.build_quote_pdf(quote)
+    return send_file(
+        BytesIO(pdf_bytes), mimetype="application/pdf",
+        as_attachment=True, download_name=f"quote-{quote_number}.pdf",
+    )
 
 
 @app.route("/api/price-update/parse", methods=["POST"])

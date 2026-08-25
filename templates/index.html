@@ -198,6 +198,42 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* --- quote cart --- */
+  section.quote-cart {
+    margin-bottom: 20px; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 22px; background: var(--surface);
+  }
+  /* Deliberately a sibling of section.quote-cart, not a child -- the cart
+     section hides itself once saving empties the cart, and a save
+     confirmation (with the PDF link) living inside it would vanish along
+     with it before anyone could read it. */
+  .quote-save-status:not(:empty) { margin-bottom: 56px; }
+  .cart-item {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 0.88rem;
+  }
+  .cart-item-label { color: var(--ink); }
+  .cart-item-total { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-muted); }
+  .cart-remove {
+    background: none; border: none; cursor: pointer; color: var(--ink-muted); font-size: 0.9rem;
+    padding: 2px 6px; line-height: 1;
+  }
+  .cart-remove:hover { color: var(--danger); }
+  .cart-total { margin: 12px 0 16px; font-weight: 500; }
+  .cart-client-fields { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; }
+  .cart-client-fields .field input { width: 200px; }
+  .success { color: #1a7a41; margin-top: 10px; font-size: 0.9rem; }
+  :root[data-theme="dark"] .success { color: #7fe0a3; }
+
+  .quote-history-row {
+    display: flex; align-items: center; gap: 16px; padding: 10px 0;
+    border-bottom: 1px solid var(--line); font-size: 0.88rem;
+  }
+  .quote-history-row .qh-number { font-family: "IBM Plex Mono", monospace; color: var(--ink-muted); width: 56px; }
+  .quote-history-row .qh-client { flex: 1; }
+  .quote-history-row .qh-date { color: var(--ink-muted); white-space: nowrap; }
+  .quote-history-row .qh-total { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
   /* --- secondary tools --- */
   section.tools { border-top: 1px solid var(--line); padding-top: 32px; }
   .tab-strip { display: flex; gap: 22px; margin-bottom: 20px; }
@@ -369,6 +405,29 @@
     </div>
   </section>
 
+  <section class="quote-cart" id="quote-cart-section" style="display:none;">
+    <p class="eyebrow">Current Quote</p>
+    <div id="quote-cart-items"></div>
+    <p class="cart-total" id="quote-cart-total"></p>
+    <div class="cart-client-fields">
+      <div class="field">
+        <label for="quote-client-name">Client name</label>
+        <input type="text" id="quote-client-name" list="quote-client-names" placeholder="Client name">
+        <datalist id="quote-client-names"></datalist>
+      </div>
+      <div class="field">
+        <label for="quote-client-phone">Phone (optional)</label>
+        <input type="text" id="quote-client-phone" placeholder="050...">
+      </div>
+      <div class="field">
+        <label for="quote-client-email">Email (optional)</label>
+        <input type="text" id="quote-client-email" placeholder="client@example.com">
+      </div>
+      <button class="action" id="quote-save-btn">Save Quote</button>
+    </div>
+  </section>
+  <div id="quote-save-status" class="quote-save-status"></div>
+
   <section class="tools">
     <p class="eyebrow">More ways to ask</p>
     <div class="tab-strip">
@@ -376,6 +435,7 @@
       <button class="tab-btn" data-tab="update">Update prices</button>
       <button class="tab-btn" data-tab="pricelist">Price list</button>
       <button class="tab-btn" data-tab="orderstatus">Order status</button>
+      <button class="tab-btn" data-tab="quotehistory">Quote History</button>
     </div>
 
     <div class="tool-panel active" id="panel-freetext">
@@ -410,6 +470,12 @@
       </div>
       <div id="order-status-status"></div>
       <div id="order-status-results"></div>
+    </div>
+
+    <div class="tool-panel" id="panel-quotehistory">
+      <p class="muted">Every saved price quote, newest first. Search by client name to see one client's full history.</p>
+      <input type="text" class="text-input" id="quote-history-search" placeholder="Search by client name...">
+      <div id="quote-history-list"></div>
     </div>
   </section>
 
@@ -756,7 +822,10 @@ function itemsForLine(slotKey, currentItem) {
   return items.filter(name => profileFamily(name) === family);
 }
 
+let currentQuoteResult = null; // the full priced work-item object behind whatever's showing in #calc-result
+
 function renderQuickQuoteResult(q) {
+  currentQuoteResult = q;
   const resultEl = document.getElementById('calc-result');
   let html = '<div class="result">';
   for (const l of q.lines) {
@@ -771,8 +840,13 @@ function renderQuickQuoteResult(q) {
   html += `<p class="meta">Quantity ${q.order_quantity} · Margin ${(q.margin*100).toFixed(1)}%</p>`;
   html += `<div class="subtotal-row"><span>Price before VAT</span><span class="amount">${fmt(q.quantity_price)}</span></div>`;
   html += `<div class="grand-total"><span class="label">Total incl. VAT</span><span class="amount">${fmt(q.final_price_incl_vat)}</span></div>`;
+  html += `<button type="button" class="action" id="add-to-quote-btn" style="margin-top:12px;">Add to Quote</button>`;
   html += '</div>';
   resultEl.innerHTML = html;
+
+  document.getElementById('add-to-quote-btn').addEventListener('click', () => {
+    addCurrentResultToQuote(currentQuoteResult, document.getElementById('measure-name').textContent);
+  });
 
   resultEl.querySelectorAll('.line-edit').forEach(select => {
     select.addEventListener('change', () => {
@@ -849,6 +923,115 @@ function performCalculation() {
   fetchAndRenderQuote(selectedVariantObj.key, overrideComponents);
 }
 
+/* ---------------- Quote cart (build up a multi-item client quote) ---------------- */
+
+// Each entry keeps the full priced work-item object (exactly what
+// price_parsed_lines() returned) alongside a plain-language label for the
+// cart display -- POSTing to /api/quotes sends the work_item objects
+// as-is, so the saved quote and PDF reuse the same numbers already shown
+// on screen rather than recomputing anything.
+let quoteCart = [];
+
+function renderQuoteCart() {
+  const section = document.getElementById('quote-cart-section');
+  const itemsEl = document.getElementById('quote-cart-items');
+  const totalEl = document.getElementById('quote-cart-total');
+  if (quoteCart.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+  itemsEl.innerHTML = quoteCart.map((item, idx) => `
+    <div class="cart-item">
+      <span class="cart-item-label">${escapeHtml(item.label)} — ${item.work_item.height_cm}×${item.work_item.width_cm} cm × ${item.work_item.order_quantity}</span>
+      <span class="cart-item-total">${fmt(item.work_item.quantity_price)}</span>
+      <button type="button" class="cart-remove" data-idx="${idx}">✕</button>
+    </div>
+  `).join('');
+  const total = quoteCart.reduce((sum, item) => sum + item.work_item.quantity_price, 0);
+  totalEl.textContent = `${quoteCart.length} item(s) — Total: ${fmt(total)} (before VAT)`;
+  itemsEl.querySelectorAll('.cart-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      quoteCart.splice(parseInt(btn.dataset.idx, 10), 1);
+      renderQuoteCart();
+    });
+  });
+}
+
+function addCurrentResultToQuote(workItem, label) {
+  if (!workItem) return;
+  quoteCart.push({label, work_item: workItem});
+  renderQuoteCart();
+}
+
+async function loadQuoteClientNames() {
+  try {
+    const res = await fetch(API_BASE + '/api/quotes/clients');
+    const data = await res.json();
+    document.getElementById('quote-client-names').innerHTML =
+      data.clients.map(name => `<option value="${escapeHtml(name)}">`).join('');
+  } catch (e) { /* autocomplete is a nicety, not worth surfacing an error for */ }
+}
+loadQuoteClientNames();
+
+document.getElementById('quote-save-btn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('quote-save-status');
+  const clientName = document.getElementById('quote-client-name').value.trim();
+  if (!clientName) { statusEl.innerHTML = '<div class="error">Enter a client name.</div>'; return; }
+  if (quoteCart.length === 0) { statusEl.innerHTML = '<div class="error">Add at least one item first.</div>'; return; }
+  statusEl.innerHTML = '<span class="spinner"></span>Saving…';
+  try {
+    const res = await fetch(API_BASE + '/api/quotes', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        client_name: clientName,
+        client_phone: document.getElementById('quote-client-phone').value.trim(),
+        client_email: document.getElementById('quote-client-email').value.trim(),
+        work_items: quoteCart.map(item => item.work_item),
+      })
+    });
+    const data = await res.json();
+    if (data.error) { statusEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
+    const pdfUrl = `${API_BASE}/api/quotes/${data.quote_number}/pdf`;
+    statusEl.innerHTML = `<div class="success">Saved as Quote #${data.quote_number}. <a href="${pdfUrl}" target="_blank">Download PDF</a></div>`;
+    quoteCart = [];
+    renderQuoteCart();
+    document.getElementById('quote-client-phone').value = '';
+    document.getElementById('quote-client-email').value = '';
+    loadQuoteClientNames();
+  } catch (e) {
+    statusEl.innerHTML = `<div class="error">${e}</div>`;
+  }
+});
+
+/* ---------------- Quote History ---------------- */
+
+async function loadQuoteHistory(clientFilter) {
+  const listEl = document.getElementById('quote-history-list');
+  listEl.innerHTML = '<span class="spinner"></span>Loading…';
+  try {
+    const url = API_BASE + '/api/quotes' + (clientFilter ? '?client=' + encodeURIComponent(clientFilter) : '');
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.quotes.length) { listEl.innerHTML = '<div class="muted">No quotes yet.</div>'; return; }
+    listEl.innerHTML = data.quotes.map(q => `
+      <div class="quote-history-row">
+        <span class="qh-number">#${q.quote_number}</span>
+        <span class="qh-client">${escapeHtml(q.client_name)}</span>
+        <span class="qh-date">${q.created_date}</span>
+        <span class="qh-total">${fmt(q.grand_total_incl_vat)}</span>
+        <a href="${API_BASE}/api/quotes/${q.quote_number}/pdf" target="_blank">PDF</a>
+      </div>
+    `).join('');
+  } catch (e) {
+    listEl.innerHTML = `<div class="error">${e}</div>`;
+  }
+}
+
+document.getElementById('quote-history-search').addEventListener('input', (e) => {
+  loadQuoteHistory(e.target.value.trim());
+});
+
 function handleCalculateClick() {
   const h = parseFloat(document.getElementById('in-height').value);
   const w = parseFloat(document.getElementById('in-width').value);
@@ -884,6 +1067,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'pricelist' && !window.__pricelistLoaded) loadPriceList();
+    if (btn.dataset.tab === 'quotehistory') loadQuoteHistory(document.getElementById('quote-history-search').value.trim());
   });
 });
 
