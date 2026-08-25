@@ -18,24 +18,21 @@ Haifa ~1000 (all pre-VAT).
 Rates live in catalog.delivery_rates (base_fee/per_km/per_hour) so they can
 be tuned the same way every other price in pricing_data.json is.
 """
+import math
+
 from pricing_engine import PricingError
 
 
 def piece_count_multiplier(num_works):
     """
-    1.0 up to 7 works, then +0.2 per tier: >7 -> 1.2, >12 -> 1.4, >20 -> 1.6,
-    and every +8 works after that adds another +0.2 (>28 -> 1.8, >36 -> 2.0,
-    ...) -- studio owner's exact tiers up to 20, extended the same way
-    beyond that by their choice (2026-08-25).
+    Every 5 works bumps the multiplier by +0.5: 1-5 -> 1.5, 6-10 -> 2.0,
+    11-15 -> 2.5, 16-20 -> 3.0, ... (studio owner, 2026-08-25, replacing
+    the earlier ~7/12/20-work tiers). 0 works (a delivery-only preview
+    with nothing in the cart yet) gets no multiplier at all.
     """
-    if num_works <= 7:
+    if num_works <= 0:
         return 1.0
-    if num_works <= 12:
-        return 1.2
-    if num_works <= 20:
-        return 1.4
-    extra_tiers = (num_works - 20 - 1) // 8
-    return round(1.6 + 0.2 * extra_tiers, 2)
+    return round(1 + 0.5 * math.ceil(num_works / 5), 2)
 
 
 def find_city(catalog, city_name):
