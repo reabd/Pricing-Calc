@@ -346,7 +346,9 @@ def api_delivery_preview():
     if not city:
         return jsonify({"error": "city is required."}), 400
     try:
-        return jsonify(delivery.compute_delivery(catalog, city, num_works))
+        result = delivery.compute_delivery(catalog, city, num_works)
+        result["price_incl_vat"] = round(result["price"] * (1 + catalog.vat_rate), 2)
+        return jsonify(result)
     except PricingError as e:
         return jsonify({"error": str(e)}), 400
 

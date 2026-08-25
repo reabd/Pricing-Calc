@@ -62,11 +62,15 @@ def compute_delivery(catalog, city_name, num_works):
     hours = round(hours_round_trip * multiplier, 2)
 
     price = rates["base_fee"] + rates["per_km"] * km_round_trip + rates["per_hour"] * hours
+    # Rounded to the nearest 5 shekels -- a clean number on the quote/PDF
+    # (400, 405, 410...) rather than a raw formula output like 431.8
+    # (studio owner, 2026-08-25).
+    price = round(price / 5) * 5
 
     return {
         "city": city["name"],
         "km_round_trip": km_round_trip,
         "hours": hours,
         "multiplier": multiplier,
-        "price": round(price, 2),
+        "price": price,
     }

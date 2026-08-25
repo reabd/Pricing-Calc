@@ -1057,7 +1057,8 @@ document.getElementById('calc-delivery-btn').addEventListener('click', async () 
     let html = '<div class="result">';
     html += `<div class="spec-line"><span class="label">Distance — ${data.km_round_trip} km round trip</span></div>`;
     html += `<div class="spec-line"><span class="label">Drive time — ${data.hours}h${data.multiplier > 1 ? ` (×${data.multiplier} for ${numWorks} works)` : ''}</span></div>`;
-    html += `<div class="grand-total"><span class="label">Delivery to ${data.city}</span><span class="amount">${fmt(data.price)}</span></div>`;
+    html += `<div class="subtotal-row"><span>Delivery to ${data.city} — before VAT</span><span class="amount">${fmt(data.price)}</span></div>`;
+    html += `<div class="grand-total"><span class="label">Delivery to ${data.city} — incl. VAT</span><span class="amount">${fmt(data.price_incl_vat)}</span></div>`;
     html += `<button type="button" class="action" id="add-delivery-to-quote-btn" style="margin-top:12px;">Add to Quote</button>`;
     html += '</div>';
     resultEl.innerHTML = html;
@@ -1084,7 +1085,7 @@ async function updateDeliveryPreview() {
     previewEl.textContent =
       `Delivery to ${data.city}: ${data.km_round_trip} km round trip, ${data.hours}h` +
       (data.multiplier > 1 ? ` (×${data.multiplier} for ${numWorks} works)` : '') +
-      ` — ${fmt(data.price)}`;
+      ` — ${fmt(data.price)} before VAT, ${fmt(data.price_incl_vat)} incl. VAT`;
   } catch (e) {
     previewEl.textContent = '';
   }
