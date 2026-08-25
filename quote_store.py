@@ -39,7 +39,14 @@ def _save(data):
     DATA_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def create_quote(client_name, client_phone, client_email, work_items, vat_rate, discount_percent=0):
+def create_quote(client_name, client_phone, client_email, work_items, vat_rate,
+                  discount_percent=0, delivery=None):
+    """
+    delivery: optional {city, km_round_trip, hours, multiplier, price} --
+    already computed server-side by delivery.compute_delivery() (never
+    trust a client-supplied delivery price). Applied after the discount,
+    same as shipping normally isn't itself discounted.
+    """
     if not client_name or not client_name.strip():
         raise ValueError("client_name is required")
     if not work_items:
@@ -51,7 +58,8 @@ def create_quote(client_name, client_phone, client_email, work_items, vat_rate, 
     data = _load()
     quote_number = data["next_number"]
     subtotal = sum(w["quantity_price"] for w in work_items)
-    grand_total = subtotal * (1 - discount_percent / 100)
+    delivery_price = delivery["price"] if delivery else 0
+    grand_total = subtotal * (1 - discount_percent / 100) + delivery_price
     quote = {
         "quote_number": quote_number,
         "client_name": client_name.strip(),
@@ -62,6 +70,7 @@ def create_quote(client_name, client_phone, client_email, work_items, vat_rate, 
         "work_items": work_items,
         "discount_percent": discount_percent,
         "subtotal_pre_discount": round(subtotal, 2),
+        "delivery": delivery,
         "grand_total_pre_vat": round(grand_total, 2),
         "grand_total_incl_vat": round(grand_total * (1 + vat_rate), 2),
     }

@@ -427,8 +427,15 @@
         <label for="quote-discount">Discount %</label>
         <input type="number" id="quote-discount" min="0" max="99" step="0.5" placeholder="0" style="width:80px;">
       </div>
+      <div class="field">
+        <label for="quote-delivery-city">Delivery (optional)</label>
+        <select id="quote-delivery-city">
+          <option value="">No delivery</option>
+        </select>
+      </div>
       <button class="action" id="quote-save-btn">Save Quote</button>
     </div>
+    <p class="muted" id="quote-delivery-preview"></p>
   </section>
   <div id="quote-save-status" class="quote-save-status"></div>
 
@@ -964,6 +971,7 @@ function renderQuoteCart() {
       renderQuoteCart();
     });
   });
+  updateDeliveryPreview(); // piece count (for the multiplier) depends on the cart contents
 }
 
 function addCurrentResultToQuote(workItem, label) {
@@ -973,6 +981,42 @@ function addCurrentResultToQuote(workItem, label) {
 }
 
 document.getElementById('quote-discount').addEventListener('input', renderQuoteCart);
+
+/* ---------------- Delivery (Israel only) ---------------- */
+
+async function loadDeliveryCities() {
+  try {
+    const res = await fetch(API_BASE + '/api/delivery/cities');
+    const data = await res.json();
+    const select = document.getElementById('quote-delivery-city');
+    data.cities.forEach(city => {
+      const opt = document.createElement('option');
+      opt.value = city.name;
+      opt.textContent = city.name;
+      select.appendChild(opt);
+    });
+  } catch (e) { /* delivery is optional -- a failed city list shouldn't block the rest of the cart */ }
+}
+loadDeliveryCities();
+
+async function updateDeliveryPreview() {
+  const previewEl = document.getElementById('quote-delivery-preview');
+  const city = document.getElementById('quote-delivery-city').value;
+  if (!city) { previewEl.textContent = ''; return; }
+  const numWorks = quoteCart.reduce((sum, item) => sum + item.work_item.order_quantity, 0);
+  try {
+    const res = await fetch(API_BASE + `/api/delivery/preview?city=${encodeURIComponent(city)}&num_works=${numWorks}`);
+    const data = await res.json();
+    if (data.error) { previewEl.textContent = data.error; return; }
+    previewEl.textContent =
+      `Delivery to ${data.city}: ${data.km_round_trip} km round trip, ${data.hours}h` +
+      (data.multiplier > 1 ? ` (×${data.multiplier} for ${numWorks} works)` : '') +
+      ` — ${fmt(data.price)}`;
+  } catch (e) {
+    previewEl.textContent = '';
+  }
+}
+document.getElementById('quote-delivery-city').addEventListener('change', updateDeliveryPreview);
 
 async function loadQuoteClientNames() {
   try {
@@ -998,6 +1042,7 @@ document.getElementById('quote-save-btn').addEventListener('click', async () => 
         client_phone: document.getElementById('quote-client-phone').value.trim(),
         client_email: document.getElementById('quote-client-email').value.trim(),
         discount_percent: parseFloat(document.getElementById('quote-discount').value) || 0,
+        delivery_city: document.getElementById('quote-delivery-city').value,
         work_items: quoteCart.map(item => item.work_item),
       })
     });
@@ -1009,6 +1054,8 @@ document.getElementById('quote-save-btn').addEventListener('click', async () => 
     document.getElementById('quote-client-phone').value = '';
     document.getElementById('quote-client-email').value = '';
     document.getElementById('quote-discount').value = '';
+    document.getElementById('quote-delivery-city').value = '';
+    document.getElementById('quote-delivery-preview').textContent = '';
     renderQuoteCart();
     loadQuoteClientNames();
   } catch (e) {

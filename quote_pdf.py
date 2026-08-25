@@ -211,7 +211,10 @@ def build_quote_pdf(quote, output_path=None):
 
     vat_rate = quote.get("vat_rate", 0.18)
     discount_percent = quote.get("discount_percent", 0)
-    grand_total = subtotal * (1 - discount_percent / 100)
+    delivery = quote.get("delivery")
+    delivery_price = delivery["price"] if delivery else 0
+    discounted = subtotal * (1 - discount_percent / 100)
+    grand_total = discounted + delivery_price
     vat_amount = grand_total * vat_rate
     total_with_vat = grand_total + vat_amount
 
@@ -223,9 +226,12 @@ def build_quote_pdf(quote, output_path=None):
         Paragraph("Signature: " + "_" * 40, styles["small"]),
     ]
     summary_rows = []
-    if discount_percent:
+    if discount_percent or delivery:
         summary_rows.append(["Subtotal", _fmt_money(subtotal)])
-        summary_rows.append([f"Discount {discount_percent:g}%", "-" + _fmt_money(subtotal - grand_total)])
+        if discount_percent:
+            summary_rows.append([f"Discount {discount_percent:g}%", "-" + _fmt_money(subtotal - discounted)])
+        if delivery:
+            summary_rows.append([f"Delivery ({delivery['city']})", _fmt_money(delivery_price)])
     summary_rows += [
         ["Total Price", _fmt_money(grand_total)],
         [f"VAT {vat_rate*100:.1f}%", _fmt_money(vat_amount)],

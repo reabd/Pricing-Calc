@@ -54,6 +54,10 @@ class PricingCatalog:
         self.excluded_features = data["excluded_features"]
         self.slots = {s["key"]: s for s in data["slots"]}
         self.presets = {p["key"]: p for p in data.get("presets", [])}
+        # Israel-only delivery city lookup (see delivery.py) -- absent in
+        # older pricing_data.json files, so default to empty rather than
+        # KeyError on a catalog written before this existed.
+        self.delivery_cities = data.get("delivery_cities", [])
 
     def save(self):
         data = {
@@ -63,6 +67,7 @@ class PricingCatalog:
             "slots": list(self.slots.values()),
             "presets": list(self.presets.values()),
             "excluded_features": self.excluded_features,
+            "delivery_cities": self.delivery_cities,
         }
         self.path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 

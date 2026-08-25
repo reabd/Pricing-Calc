@@ -28,6 +28,7 @@ from flask import Flask, jsonify, redirect, render_template, request, send_file,
 
 import business_rules
 import daily_report
+import delivery
 import email_ai
 import email_learning
 import email_sender
@@ -292,6 +293,20 @@ def api_quotes():
 
     data = request.json or {}
     work_items = data.get("work_items") or []
+
+    delivery_result = None
+    delivery_city = data.get("delivery_city")
+    if delivery_city:
+        # Piece count = total physical pieces across the cart (an
+        # order_quantity of 3 on one work item is 3 works, not 1) — what
+        # the multiplier tiers actually mean, not the number of distinct
+        # cart entries.
+        num_works = sum(w.get("order_quantity", 1) for w in work_items)
+        try:
+            delivery_result = delivery.compute_delivery(catalog, delivery_city, num_works)
+        except PricingError as e:
+            return jsonify({"error": str(e)}), 400
+
     try:
         quote = quote_store.create_quote(
             client_name=data.get("client_name", ""),
@@ -300,6 +315,7 @@ def api_quotes():
             work_items=work_items,
             vat_rate=catalog.vat_rate,
             discount_percent=data.get("discount_percent", 0),
+            delivery=delivery_result,
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -310,6 +326,29 @@ def api_quotes():
 def api_quotes_clients():
     """Distinct client names across all saved quotes — powers the client-name autocomplete."""
     return jsonify({"clients": quote_store.list_client_names()})
+
+
+@app.route("/api/delivery/cities")
+def api_delivery_cities():
+    return jsonify({"cities": catalog.delivery_cities})
+
+
+@app.route("/api/delivery/preview")
+def api_delivery_preview():
+    """Live delivery-price preview (city + piece count) before saving a
+    quote — see delivery.py. GET, not POST: this only reads/computes,
+    nothing is persisted."""
+    city = request.args.get("city")
+    try:
+        num_works = int(request.args.get("num_works", 0))
+    except ValueError:
+        return jsonify({"error": "num_works must be an integer."}), 400
+    if not city:
+        return jsonify({"error": "city is required."}), 400
+    try:
+        return jsonify(delivery.compute_delivery(catalog, city, num_works))
+    except PricingError as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @app.route("/api/quotes/<int:quote_number>")

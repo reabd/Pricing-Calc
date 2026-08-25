@@ -3563,5 +3563,152 @@
     "Custom Profile (row 22): fully custom wood-profile builder (pick wood species/thickness/alignment) is not supported yet.",
     "Crate (rows 34-36): uses a 3D box (X/Y/Z) formula rather than height/width and is not supported yet.",
     "CNC section (rows 38-46): uses a different quantity model (decimal input, not Yes/No) and has not been verified against the workbook; not supported yet."
+  ],
+  "delivery_cities": [
+    {
+      "name": "Tel Aviv - South",
+      "km_one_way": 4,
+      "minutes_one_way": 10
+    },
+    {
+      "name": "Tel Aviv - Center",
+      "km_one_way": 7,
+      "minutes_one_way": 20
+    },
+    {
+      "name": "Tel Aviv - North",
+      "km_one_way": 12,
+      "minutes_one_way": 30
+    },
+    {
+      "name": "Ramat Gan",
+      "km_one_way": 8,
+      "minutes_one_way": 20
+    },
+    {
+      "name": "Givatayim",
+      "km_one_way": 6,
+      "minutes_one_way": 18
+    },
+    {
+      "name": "Bnei Brak",
+      "km_one_way": 9,
+      "minutes_one_way": 20
+    },
+    {
+      "name": "Holon",
+      "km_one_way": 10,
+      "minutes_one_way": 20
+    },
+    {
+      "name": "Bat Yam",
+      "km_one_way": 10,
+      "minutes_one_way": 20
+    },
+    {
+      "name": "Kiryat Ono",
+      "km_one_way": 12,
+      "minutes_one_way": 22
+    },
+    {
+      "name": "Or Yehuda",
+      "km_one_way": 12,
+      "minutes_one_way": 22
+    },
+    {
+      "name": "Ramat HaSharon",
+      "km_one_way": 12,
+      "minutes_one_way": 22
+    },
+    {
+      "name": "Rishon LeZion",
+      "km_one_way": 15,
+      "minutes_one_way": 25
+    },
+    {
+      "name": "Petah Tikva",
+      "km_one_way": 15,
+      "minutes_one_way": 25
+    },
+    {
+      "name": "Herzliya",
+      "km_one_way": 16,
+      "minutes_one_way": 35
+    },
+    {
+      "name": "Ra'anana",
+      "km_one_way": 20,
+      "minutes_one_way": 30
+    },
+    {
+      "name": "Kfar Saba",
+      "km_one_way": 22,
+      "minutes_one_way": 30
+    },
+    {
+      "name": "Rehovot",
+      "km_one_way": 22,
+      "minutes_one_way": 30
+    },
+    {
+      "name": "Ramla/Lod",
+      "km_one_way": 25,
+      "minutes_one_way": 30
+    },
+    {
+      "name": "Netanya",
+      "km_one_way": 30,
+      "minutes_one_way": 35
+    },
+    {
+      "name": "Modiin",
+      "km_one_way": 45,
+      "minutes_one_way": 45
+    },
+    {
+      "name": "Yavne",
+      "km_one_way": 30,
+      "minutes_one_way": 35
+    },
+    {
+      "name": "Ashdod",
+      "km_one_way": 40,
+      "minutes_one_way": 40
+    },
+    {
+      "name": "Ashkelon",
+      "km_one_way": 55,
+      "minutes_one_way": 50
+    },
+    {
+      "name": "Jerusalem",
+      "km_one_way": 65,
+      "minutes_one_way": 60
+    },
+    {
+      "name": "Beer Sheva",
+      "km_one_way": 115,
+      "minutes_one_way": 75
+    },
+    {
+      "name": "Haifa",
+      "km_one_way": 95,
+      "minutes_one_way": 75
+    },
+    {
+      "name": "Nahariya",
+      "km_one_way": 130,
+      "minutes_one_way": 95
+    },
+    {
+      "name": "Tiberias",
+      "km_one_way": 135,
+      "minutes_one_way": 105
+    },
+    {
+      "name": "Eilat",
+      "km_one_way": 350,
+      "minutes_one_way": 240
+    }
   ]
 }
