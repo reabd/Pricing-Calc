@@ -58,6 +58,11 @@ class PricingCatalog:
         # older pricing_data.json files, so default to empty rather than
         # KeyError on a catalog written before this existed.
         self.delivery_cities = data.get("delivery_cities", [])
+        # Flat delivery pricing formula (base_fee + per_km*km_round_trip +
+        # per_hour*hours_round_trip*piece_count_multiplier) -- see
+        # delivery.py. Defaults to zero so an older catalog doesn't crash,
+        # it'll just price every delivery at 0 until synced.
+        self.delivery_rates = data.get("delivery_rates", {"base_fee": 0, "per_km": 0, "per_hour": 0})
 
     def save(self):
         data = {
@@ -68,6 +73,7 @@ class PricingCatalog:
             "presets": list(self.presets.values()),
             "excluded_features": self.excluded_features,
             "delivery_cities": self.delivery_cities,
+            "delivery_rates": self.delivery_rates,
         }
         self.path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 

@@ -735,11 +735,11 @@ def api_catalog_sync_new_items():
 
     Slots/items are additive-only: never overwrites an existing
     slot/item, so hand-edited prices already live on the persistent disk
-    (via the Price List tab) are never touched. Presets are different —
-    there is no UI path to hand-edit a preset's component list, so a
-    changed preset is safe to sync outright (updated_presets) rather than
-    only adding brand-new preset keys. Same login/API-key gate as the
-    rest of the app.
+    (via the Price List tab) are never touched. Presets, delivery cities,
+    and delivery_rates are different — there is no UI path to hand-edit
+    any of those, so a changed one is safe to sync outright (updated_presets
+    / updated_cities / updated_delivery_rates) rather than only adding
+    brand-new keys. Same login/API-key gate as the rest of the app.
     """
     bundled = PricingCatalog(_bundled_data_path)
     added_slots, added_items = [], []
@@ -761,18 +761,28 @@ def api_catalog_sync_new_items():
         elif catalog.presets[key].get("components") != preset.get("components"):
             catalog.presets[key] = preset
             updated_presets.append(key)
-    added_cities = []
-    live_city_names = {c["name"] for c in catalog.delivery_cities}
+    added_cities, updated_cities = [], []
+    live_cities_by_name = {c["name"]: c for c in catalog.delivery_cities}
     for city in bundled.delivery_cities:
-        if city["name"] not in live_city_names:
+        live_city = live_cities_by_name.get(city["name"])
+        if live_city is None:
             catalog.delivery_cities.append(city)
             added_cities.append(city["name"])
-    if added_slots or added_presets or added_items or updated_presets or added_cities:
+        elif live_city != city:
+            live_city.update(city)
+            updated_cities.append(city["name"])
+    updated_delivery_rates = False
+    if catalog.delivery_rates != bundled.delivery_rates:
+        catalog.delivery_rates = bundled.delivery_rates
+        updated_delivery_rates = True
+    if (added_slots or added_presets or added_items or updated_presets
+            or added_cities or updated_cities or updated_delivery_rates):
         catalog.save()
     return jsonify({
         "added_slots": added_slots, "added_items": added_items,
         "added_presets": added_presets, "updated_presets": updated_presets,
-        "added_cities": added_cities,
+        "added_cities": added_cities, "updated_cities": updated_cities,
+        "updated_delivery_rates": updated_delivery_rates,
     })
 
 

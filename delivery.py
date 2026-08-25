@@ -3,19 +3,22 @@ Delivery pricing for the studio's own van (Israel only) -- see
 studio_operations_and_communication_notes.md's earlier informal delivery
 notes and the studio owner's request (2026-08-25) to formalize it.
 
-Reuses two pre-existing catalog items that were already in
-pricing_data.json (from the original Excel workbook) but never wired into
-anything: row8_car ("Car", a per-km rate) and row9_work_time ("Work Time",
-a per-hour labor rate). No new pricing math of our own -- this just feeds
-the right quantities (round-trip km, adjusted hours) through the exact
-same price_job() engine every other quote line already goes through.
-"""
-from pricing_engine import JobComponentRequest, PricingError, price_job
+Originally reused two pre-existing catalog items (Car/Work Time, from the
+original Excel workbook) through the same price_job() margin engine every
+other quote line goes through. Their rates were tuned for skilled framing
+labor and material markup, not van callouts, and produced baseline prices
+far below what the studio actually wants to charge -- so this now uses its
+own flat formula instead, calibrated against five real target prices the
+studio owner gave directly (2026-08-25):
+Herzliya ~400, Jerusalem ~850, Netanya ~600, Tel Aviv Center ~350,
+Haifa ~1000 (all pre-VAT).
 
-CAR_SLOT = "row8_car"
-CAR_ITEM = "Car"
-WORK_TIME_SLOT = "row9_work_time"
-WORK_TIME_ITEM = "Work Time"
+  price = base_fee + per_km * km_round_trip + per_hour * hours_round_trip * multiplier
+
+Rates live in catalog.delivery_rates (base_fee/per_km/per_hour) so they can
+be tuned the same way every other price in pricing_data.json is.
+"""
+from pricing_engine import PricingError
 
 
 def piece_count_multiplier(num_works):
@@ -46,29 +49,24 @@ def compute_delivery(catalog, city_name, num_works):
     """
     Returns {city, km_round_trip, hours, multiplier, price} or raises
     PricingError if the city isn't in the lookup table. `price` is the
-    full priced delivery charge (car + labor, with the item's own
-    material/effort margins already applied via price_job) -- ready to
-    add straight onto a quote.
+    full delivery charge, ready to add straight onto a quote.
     """
     city = find_city(catalog, city_name)
     if city is None:
         raise PricingError(f"Unknown delivery city: {city_name!r}")
 
+    rates = catalog.delivery_rates
     km_round_trip = city["km_one_way"] * 2
     hours_round_trip = (city["minutes_one_way"] * 2) / 60
     multiplier = piece_count_multiplier(num_works)
     hours = round(hours_round_trip * multiplier, 2)
 
-    components = [
-        JobComponentRequest(CAR_SLOT, CAR_ITEM, quantity=km_round_trip),
-        JobComponentRequest(WORK_TIME_SLOT, WORK_TIME_ITEM, quantity=hours),
-    ]
-    result = price_job(catalog, components, height_cm=0, width_cm=0, order_quantity=1)
+    price = rates["base_fee"] + rates["per_km"] * km_round_trip + rates["per_hour"] * hours
 
     return {
         "city": city["name"],
         "km_round_trip": km_round_trip,
         "hours": hours,
         "multiplier": multiplier,
-        "price": round(result.quantity_price, 2),
+        "price": round(price, 2),
     }

@@ -384,7 +384,7 @@
         <input type="checkbox" id="back-frame-check"> <span>Back Frame</span>
       </label>
       <div id="options-groups"></div>
-      <div class="measure-row">
+      <div class="measure-row" id="measure-row-normal">
         <div class="field">
           <label for="in-height">Height (cm)</label>
           <input type="number" id="in-height" min="1" step="0.5" placeholder="0">
@@ -399,6 +399,19 @@
           <input type="number" id="in-qty" min="1" step="1" value="1">
         </div>
         <button class="action" id="calc-btn">Calculate</button>
+      </div>
+      <div class="measure-row" id="measure-row-delivery" style="display:none;">
+        <div class="field">
+          <label for="in-delivery-city">City</label>
+          <select id="in-delivery-city">
+            <option value="">Choose city…</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="in-delivery-num-works">Number of works</label>
+          <input type="number" id="in-delivery-num-works" min="1" step="1" value="1">
+        </div>
+        <button class="action" id="calc-delivery-btn">Calculate</button>
       </div>
       <div id="calc-status"></div>
       <div id="calc-result"></div>
@@ -535,6 +548,7 @@ const ICONS = {
   lightbox: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="10" y="10" width="28" height="28"/><line x1="24" y1="2" x2="24" y2="7"/><line x1="24" y1="41" x2="24" y2="46"/><line x1="2" y1="24" x2="7" y2="24"/><line x1="41" y1="24" x2="46" y2="24"/></svg>',
   uv_print: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="36"/><path d="M14 30 L20 18 L26 30" stroke-width="2"/><line x1="16" y1="26" x2="24" y2="26" stroke-width="2"/><line x1="30" y1="18" x2="30" y2="30" stroke-width="2"/></svg>',
   uv_facemount: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="36"/><line x1="12" y1="34" x2="34" y2="12"/><path d="M14 30 L20 18 L26 30" stroke-width="2"/><line x1="16" y1="26" x2="24" y2="26" stroke-width="2"/></svg>',
+  delivery: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="14" width="26" height="18" stroke-width="2"/><path d="M29 20 H39 L45 26 V32 H29 Z" stroke-width="2"/><circle cx="13" cy="36" r="4" stroke-width="2"/><circle cx="37" cy="36" r="4" stroke-width="2"/></svg>',
 };
 
 // Most cards map straight to a real preset in the catalog (key ==
@@ -553,6 +567,7 @@ const QUICK_PRESETS = [
   {key: 'lightbox', label: 'Lightbox'},
   {key: 'uv_print', label: 'UV Print'},
   {key: 'uv_facemount', label: 'UV Facemount'},
+  {key: 'delivery', label: 'Delivery', special: 'delivery'},
 ];
 
 // Variants are either a separate, already-tested combination from the
@@ -773,6 +788,22 @@ function selectPreset(p) {
   document.getElementById('calc-result').innerHTML = '';
   document.getElementById('calc-status').innerHTML = '';
 
+  const isDelivery = p.special === 'delivery';
+  document.getElementById('measure-row-normal').style.display = isDelivery ? 'none' : 'flex';
+  document.getElementById('measure-row-delivery').style.display = isDelivery ? 'flex' : 'none';
+  document.getElementById('variant-row').style.display = isDelivery ? 'none' : '';
+  document.getElementById('art-glass-row').style.display = isDelivery ? 'none' : document.getElementById('art-glass-row').style.display;
+  document.getElementById('back-frame-row').style.display = isDelivery ? 'none' : document.getElementById('back-frame-row').style.display;
+  document.getElementById('options-groups').style.display = isDelivery ? 'none' : '';
+  if (isDelivery) {
+    // If the cart already has real work items, default the works count to
+    // the actual piece count instead of leaving it at 1 — matches what
+    // "Add to Quote" will end up using anyway (see addDeliveryToQuote).
+    const cartWorks = quoteCart.reduce((sum, item) => sum + item.work_item.order_quantity, 0);
+    if (cartWorks > 0) document.getElementById('in-delivery-num-works').value = cartWorks;
+    return;
+  }
+
   // If a size was already entered (from before, or a previous preset),
   // carry it over and price the new preset immediately — no need to
   // press Calculate again just for switching frame types.
@@ -942,12 +973,16 @@ function performCalculation() {
 // as-is, so the saved quote and PDF reuse the same numbers already shown
 // on screen rather than recomputing anything.
 let quoteCart = [];
+// Set once the studio picks a delivery city from the standalone Delivery
+// card, so the cart section stays visible (and keeps showing the delivery
+// preview) even before any real work item has been added to it.
+let cartDeliverySelected = false;
 
 function renderQuoteCart() {
   const section = document.getElementById('quote-cart-section');
   const itemsEl = document.getElementById('quote-cart-items');
   const totalEl = document.getElementById('quote-cart-total');
-  if (quoteCart.length === 0) {
+  if (quoteCart.length === 0 && !cartDeliverySelected) {
     section.style.display = 'none';
     return;
   }
@@ -988,16 +1023,54 @@ async function loadDeliveryCities() {
   try {
     const res = await fetch(API_BASE + '/api/delivery/cities');
     const data = await res.json();
-    const select = document.getElementById('quote-delivery-city');
-    data.cities.forEach(city => {
-      const opt = document.createElement('option');
-      opt.value = city.name;
-      opt.textContent = city.name;
-      select.appendChild(opt);
+    ['quote-delivery-city', 'in-delivery-city'].forEach(id => {
+      const select = document.getElementById(id);
+      data.cities.forEach(city => {
+        const opt = document.createElement('option');
+        opt.value = city.name;
+        opt.textContent = city.name;
+        select.appendChild(opt);
+      });
     });
   } catch (e) { /* delivery is optional -- a failed city list shouldn't block the rest of the cart */ }
 }
 loadDeliveryCities();
+
+// Standalone "Delivery" product card -- lets the studio price/preview a
+// delivery charge on its own (like every other card), separate from the
+// quote-cart's own delivery field (which always derives its piece count
+// from the cart's real work items -- see updateDeliveryPreview). Add to
+// Quote here just sets that same city on the cart; the multiplier still
+// comes from whatever's actually in the cart, never from this preview.
+document.getElementById('calc-delivery-btn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('calc-status');
+  const resultEl = document.getElementById('calc-result');
+  const city = document.getElementById('in-delivery-city').value;
+  const numWorks = parseInt(document.getElementById('in-delivery-num-works').value, 10) || 1;
+  if (!city) { resultEl.innerHTML = '<div class="error">Choose a city first.</div>'; return; }
+  statusEl.innerHTML = '<span class="spinner"></span>Calculating…';
+  try {
+    const res = await fetch(API_BASE + `/api/delivery/preview?city=${encodeURIComponent(city)}&num_works=${numWorks}`);
+    const data = await res.json();
+    statusEl.innerHTML = '';
+    if (data.error) { resultEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
+    let html = '<div class="result">';
+    html += `<div class="spec-line"><span class="label">Distance — ${data.km_round_trip} km round trip</span></div>`;
+    html += `<div class="spec-line"><span class="label">Drive time — ${data.hours}h${data.multiplier > 1 ? ` (×${data.multiplier} for ${numWorks} works)` : ''}</span></div>`;
+    html += `<div class="grand-total"><span class="label">Delivery to ${data.city}</span><span class="amount">${fmt(data.price)}</span></div>`;
+    html += `<button type="button" class="action" id="add-delivery-to-quote-btn" style="margin-top:12px;">Add to Quote</button>`;
+    html += '</div>';
+    resultEl.innerHTML = html;
+    document.getElementById('add-delivery-to-quote-btn').addEventListener('click', () => {
+      document.getElementById('quote-delivery-city').value = city;
+      cartDeliverySelected = true;
+      renderQuoteCart();
+    });
+  } catch (e) {
+    statusEl.innerHTML = '';
+    resultEl.innerHTML = `<div class="error">${e}</div>`;
+  }
+});
 
 async function updateDeliveryPreview() {
   const previewEl = document.getElementById('quote-delivery-preview');
@@ -1051,6 +1124,7 @@ document.getElementById('quote-save-btn').addEventListener('click', async () => 
     const pdfUrl = `${API_BASE}/api/quotes/${data.quote_number}/pdf`;
     statusEl.innerHTML = `<div class="success">Saved as Quote #${data.quote_number}. <a href="${pdfUrl}" target="_blank">Download PDF</a></div>`;
     quoteCart = [];
+    cartDeliverySelected = false;
     document.getElementById('quote-client-phone').value = '';
     document.getElementById('quote-client-email').value = '';
     document.getElementById('quote-discount').value = '';

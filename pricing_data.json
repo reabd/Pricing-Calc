@@ -3657,7 +3657,7 @@
     },
     {
       "name": "Netanya",
-      "km_one_way": 30,
+      "km_one_way": 35,
       "minutes_one_way": 35
     },
     {
@@ -3710,5 +3710,10 @@
       "km_one_way": 350,
       "minutes_one_way": 240
     }
-  ]
+  ],
+  "delivery_rates": {
+    "base_fee": 290,
+    "per_km": 3.7,
+    "per_hour": 20
+  }
 }
