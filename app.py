@@ -761,11 +761,18 @@ def api_catalog_sync_new_items():
         elif catalog.presets[key].get("components") != preset.get("components"):
             catalog.presets[key] = preset
             updated_presets.append(key)
-    if added_slots or added_presets or added_items or updated_presets:
+    added_cities = []
+    live_city_names = {c["name"] for c in catalog.delivery_cities}
+    for city in bundled.delivery_cities:
+        if city["name"] not in live_city_names:
+            catalog.delivery_cities.append(city)
+            added_cities.append(city["name"])
+    if added_slots or added_presets or added_items or updated_presets or added_cities:
         catalog.save()
     return jsonify({
         "added_slots": added_slots, "added_items": added_items,
         "added_presets": added_presets, "updated_presets": updated_presets,
+        "added_cities": added_cities,
     })
 
 
