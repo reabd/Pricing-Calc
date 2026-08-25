@@ -423,6 +423,10 @@
         <label for="quote-client-email">Email (optional)</label>
         <input type="text" id="quote-client-email" placeholder="client@example.com">
       </div>
+      <div class="field">
+        <label for="quote-discount">Discount %</label>
+        <input type="number" id="quote-discount" min="0" max="99" step="0.5" placeholder="0" style="width:80px;">
+      </div>
       <button class="action" id="quote-save-btn">Save Quote</button>
     </div>
   </section>
@@ -948,8 +952,12 @@ function renderQuoteCart() {
       <button type="button" class="cart-remove" data-idx="${idx}">✕</button>
     </div>
   `).join('');
-  const total = quoteCart.reduce((sum, item) => sum + item.work_item.quantity_price, 0);
-  totalEl.textContent = `${quoteCart.length} item(s) — Total: ${fmt(total)} (before VAT)`;
+  const subtotal = quoteCart.reduce((sum, item) => sum + item.work_item.quantity_price, 0);
+  const discountPct = parseFloat(document.getElementById('quote-discount').value) || 0;
+  const afterDiscount = subtotal * (1 - discountPct / 100);
+  totalEl.textContent = discountPct > 0
+    ? `${quoteCart.length} item(s) — Subtotal ${fmt(subtotal)} − ${discountPct}% = ${fmt(afterDiscount)} (before VAT)`
+    : `${quoteCart.length} item(s) — Total: ${fmt(subtotal)} (before VAT)`;
   itemsEl.querySelectorAll('.cart-remove').forEach(btn => {
     btn.addEventListener('click', () => {
       quoteCart.splice(parseInt(btn.dataset.idx, 10), 1);
@@ -963,6 +971,8 @@ function addCurrentResultToQuote(workItem, label) {
   quoteCart.push({label, work_item: workItem});
   renderQuoteCart();
 }
+
+document.getElementById('quote-discount').addEventListener('input', renderQuoteCart);
 
 async function loadQuoteClientNames() {
   try {
@@ -987,6 +997,7 @@ document.getElementById('quote-save-btn').addEventListener('click', async () => 
         client_name: clientName,
         client_phone: document.getElementById('quote-client-phone').value.trim(),
         client_email: document.getElementById('quote-client-email').value.trim(),
+        discount_percent: parseFloat(document.getElementById('quote-discount').value) || 0,
         work_items: quoteCart.map(item => item.work_item),
       })
     });
@@ -995,9 +1006,10 @@ document.getElementById('quote-save-btn').addEventListener('click', async () => 
     const pdfUrl = `${API_BASE}/api/quotes/${data.quote_number}/pdf`;
     statusEl.innerHTML = `<div class="success">Saved as Quote #${data.quote_number}. <a href="${pdfUrl}" target="_blank">Download PDF</a></div>`;
     quoteCart = [];
-    renderQuoteCart();
     document.getElementById('quote-client-phone').value = '';
     document.getElementById('quote-client-email').value = '';
+    document.getElementById('quote-discount').value = '';
+    renderQuoteCart();
     loadQuoteClientNames();
   } catch (e) {
     statusEl.innerHTML = `<div class="error">${e}</div>`;

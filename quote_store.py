@@ -39,15 +39,19 @@ def _save(data):
     DATA_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def create_quote(client_name, client_phone, client_email, work_items, vat_rate):
+def create_quote(client_name, client_phone, client_email, work_items, vat_rate, discount_percent=0):
     if not client_name or not client_name.strip():
         raise ValueError("client_name is required")
     if not work_items:
         raise ValueError("work_items must have at least one item")
+    discount_percent = float(discount_percent or 0)
+    if not 0 <= discount_percent < 100:
+        raise ValueError("discount_percent must be between 0 and 100")
 
     data = _load()
     quote_number = data["next_number"]
-    grand_total = sum(w["quantity_price"] for w in work_items)
+    subtotal = sum(w["quantity_price"] for w in work_items)
+    grand_total = subtotal * (1 - discount_percent / 100)
     quote = {
         "quote_number": quote_number,
         "client_name": client_name.strip(),
@@ -56,6 +60,8 @@ def create_quote(client_name, client_phone, client_email, work_items, vat_rate):
         "created_date": date.today().isoformat(),
         "vat_rate": vat_rate,
         "work_items": work_items,
+        "discount_percent": discount_percent,
+        "subtotal_pre_discount": round(subtotal, 2),
         "grand_total_pre_vat": round(grand_total, 2),
         "grand_total_incl_vat": round(grand_total * (1 + vat_rate), 2),
     }

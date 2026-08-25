@@ -299,6 +299,7 @@ def api_quotes():
             client_email=data.get("client_email"),
             work_items=work_items,
             vat_rate=catalog.vat_rate,
+            discount_percent=data.get("discount_percent", 0),
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400

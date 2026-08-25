@@ -71,7 +71,11 @@ def describe_work_item(entry):
 
 
 def _fmt_money(amount):
-    return f"₪ {amount:,.2f}"
+    # Round display only -- matches the calculator UI's fmt() (JS,
+    # maximumFractionDigits: 0), which the studio owner confirmed is the
+    # convention they want here too. The underlying stored amounts stay
+    # full-precision; only what's printed is rounded.
+    return f"₪ {round(amount):,}"
 
 
 def _styles():
@@ -172,13 +176,13 @@ def build_quote_pdf(quote, output_path=None):
         Paragraph("Total Price", styles["th"]),
     ]
     rows = [header_row]
-    grand_total = 0.0
+    subtotal = 0.0
     for i, entry in enumerate(quote["work_items"], start=1):
         desc_lines = describe_work_item(entry)
         desc_html = "<br/>".join(desc_lines) if desc_lines else "—"
         size_str = f"{entry['height_cm']:g} x {entry['width_cm']:g}"
         total = entry["quantity_price"]
-        grand_total += total
+        subtotal += total
         rows.append([
             Paragraph(str(i), styles["cell_center"]),
             Paragraph(size_str, styles["cell_center"]),
@@ -206,6 +210,8 @@ def build_quote_pdf(quote, output_path=None):
     story.append(Spacer(1, 8 * mm))
 
     vat_rate = quote.get("vat_rate", 0.18)
+    discount_percent = quote.get("discount_percent", 0)
+    grand_total = subtotal * (1 - discount_percent / 100)
     vat_amount = grand_total * vat_rate
     total_with_vat = grand_total + vat_amount
 
@@ -216,7 +222,11 @@ def build_quote_pdf(quote, output_path=None):
         Spacer(1, 6 * mm),
         Paragraph("Signature: " + "_" * 40, styles["small"]),
     ]
-    summary_rows = [
+    summary_rows = []
+    if discount_percent:
+        summary_rows.append(["Subtotal", _fmt_money(subtotal)])
+        summary_rows.append([f"Discount {discount_percent:g}%", "-" + _fmt_money(subtotal - grand_total)])
+    summary_rows += [
         ["Total Price", _fmt_money(grand_total)],
         [f"VAT {vat_rate*100:.1f}%", _fmt_money(vat_amount)],
         ["Total w/Tax", _fmt_money(total_with_vat)],
