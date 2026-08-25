@@ -62,7 +62,7 @@ class PricingCatalog:
         # per_hour*hours_round_trip*piece_count_multiplier) -- see
         # delivery.py. Defaults to zero so an older catalog doesn't crash,
         # it'll just price every delivery at 0 until synced.
-        self.delivery_rates = data.get("delivery_rates", {"base_fee": 0, "per_km": 0, "per_hour": 0})
+        self.delivery_rates = data.get("delivery_rates", {"base_fee": 0, "per_km": 0, "per_hour": 0, "tier_step": 0})
 
     def save(self):
         data = {

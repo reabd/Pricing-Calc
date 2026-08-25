@@ -3714,6 +3714,7 @@
   "delivery_rates": {
     "base_fee": 290,
     "per_km": 3.7,
-    "per_hour": 20
+    "per_hour": 20,
+    "tier_step": 200
   }
 }

@@ -1040,7 +1040,7 @@ loadDeliveryCities();
 // delivery charge on its own (like every other card), separate from the
 // quote-cart's own delivery field (which always derives its piece count
 // from the cart's real work items -- see updateDeliveryPreview). Add to
-// Quote here just sets that same city on the cart; the multiplier still
+// Quote here just sets that same city on the cart; the tier step still
 // comes from whatever's actually in the cart, never from this preview.
 document.getElementById('calc-delivery-btn').addEventListener('click', async () => {
   const statusEl = document.getElementById('calc-status');
@@ -1056,7 +1056,7 @@ document.getElementById('calc-delivery-btn').addEventListener('click', async () 
     if (data.error) { resultEl.innerHTML = `<div class="error">${data.error}</div>`; return; }
     let html = '<div class="result">';
     html += `<div class="spec-line"><span class="label">Distance — ${data.km_round_trip} km round trip</span></div>`;
-    html += `<div class="spec-line"><span class="label">Drive time — ${data.hours}h${data.multiplier > 1 ? ` (×${data.multiplier} for ${numWorks} works)` : ''}</span></div>`;
+    html += `<div class="spec-line"><span class="label">Drive time — ${data.hours}h${data.tier_extra > 0 ? ` (+${fmt(data.tier_extra)} for ${numWorks} works)` : ''}</span></div>`;
     html += `<div class="subtotal-row"><span>Delivery to ${data.city} — before VAT</span><span class="amount">${fmt(data.price)}</span></div>`;
     html += `<div class="grand-total"><span class="label">Delivery to ${data.city} — incl. VAT</span><span class="amount">${fmt(data.price_incl_vat)}</span></div>`;
     html += `<button type="button" class="action" id="add-delivery-to-quote-btn" style="margin-top:12px;">Add to Quote</button>`;
@@ -1084,7 +1084,7 @@ async function updateDeliveryPreview() {
     if (data.error) { previewEl.textContent = data.error; return; }
     previewEl.textContent =
       `Delivery to ${data.city}: ${data.km_round_trip} km round trip, ${data.hours}h` +
-      (data.multiplier > 1 ? ` (×${data.multiplier} for ${numWorks} works)` : '') +
+      (data.tier_extra > 0 ? ` (+${fmt(data.tier_extra)} for ${numWorks} works)` : '') +
       ` — ${fmt(data.price)} before VAT, ${fmt(data.price_incl_vat)} incl. VAT`;
   } catch (e) {
     previewEl.textContent = '';

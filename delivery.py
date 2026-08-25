@@ -13,26 +13,30 @@ studio owner gave directly (2026-08-25):
 Herzliya ~400, Jerusalem ~850, Netanya ~600, Tel Aviv Center ~350,
 Haifa ~1000 (all pre-VAT).
 
-  price = base_fee + per_km * km_round_trip + per_hour * hours_round_trip * multiplier
+  base_price = base_fee + per_km * km_round_trip + per_hour * hours_round_trip * BASE_MULTIPLIER
 
-Rates live in catalog.delivery_rates (base_fee/per_km/per_hour) so they can
-be tuned the same way every other price in pricing_data.json is.
+A continuous per-work multiplier was tried next, but its effect turned out
+too small to feel real (a handful of NIS per extra tier) -- so the piece
+count now instead steps the price in flat TIER_STEP jumps every
+TIER_WIDTH works, on top of that same base_price: 1-7 works -> base_price,
+8-14 -> base_price + TIER_STEP, 15-21 -> base_price + 2*TIER_STEP, etc.
+(studio owner, 2026-08-25, using Ramat HaSharon's base_price of 400 as the
+worked example: 1-7 -> 400, 8-14 -> 600, 15-21 -> 800). TIER_STEP is a flat
+NIS amount, the same for every city, not scaled by distance.
+
+Rates live in catalog.delivery_rates (base_fee/per_km/per_hour/tier_step)
+so they can be tuned the same way every other price in pricing_data.json is.
 """
-import math
-
 from pricing_engine import PricingError
 
+BASE_MULTIPLIER = 1.5  # matches the already-approved 1-7 works baseline
+TIER_WIDTH = 7
 
-def piece_count_multiplier(num_works):
-    """
-    Every 5 works bumps the multiplier by +0.5: 1-5 -> 1.5, 6-10 -> 2.0,
-    11-15 -> 2.5, 16-20 -> 3.0, ... (studio owner, 2026-08-25, replacing
-    the earlier ~7/12/20-work tiers). 0 works (a delivery-only preview
-    with nothing in the cart yet) gets no multiplier at all.
-    """
-    if num_works <= 0:
-        return 1.0
-    return round(1 + 0.5 * math.ceil(num_works / 5), 2)
+
+def tier_index(num_works):
+    """0 for 1-7 works, 1 for 8-14, 2 for 15-21, ... 0 works (an empty-cart
+    preview) is treated the same as the first tier."""
+    return max(num_works - 1, 0) // TIER_WIDTH
 
 
 def find_city(catalog, city_name):
@@ -44,9 +48,9 @@ def find_city(catalog, city_name):
 
 def compute_delivery(catalog, city_name, num_works):
     """
-    Returns {city, km_round_trip, hours, multiplier, price} or raises
-    PricingError if the city isn't in the lookup table. `price` is the
-    full delivery charge, ready to add straight onto a quote.
+    Returns {city, km_round_trip, hours, tier_index, tier_extra, price} or
+    raises PricingError if the city isn't in the lookup table. `price` is
+    the full delivery charge, ready to add straight onto a quote.
     """
     city = find_city(catalog, city_name)
     if city is None:
@@ -55,19 +59,23 @@ def compute_delivery(catalog, city_name, num_works):
     rates = catalog.delivery_rates
     km_round_trip = city["km_one_way"] * 2
     hours_round_trip = (city["minutes_one_way"] * 2) / 60
-    multiplier = piece_count_multiplier(num_works)
-    hours = round(hours_round_trip * multiplier, 2)
+    hours = round(hours_round_trip * BASE_MULTIPLIER, 2)
 
-    price = rates["base_fee"] + rates["per_km"] * km_round_trip + rates["per_hour"] * hours
+    base_price = rates["base_fee"] + rates["per_km"] * km_round_trip + rates["per_hour"] * hours
     # Rounded to the nearest 5 shekels -- a clean number on the quote/PDF
     # (400, 405, 410...) rather than a raw formula output like 431.8
     # (studio owner, 2026-08-25).
-    price = round(price / 5) * 5
+    base_price = round(base_price / 5) * 5
+
+    idx = tier_index(num_works)
+    tier_extra = rates.get("tier_step", 200) * idx
+    price = base_price + tier_extra
 
     return {
         "city": city["name"],
         "km_round_trip": km_round_trip,
         "hours": hours,
-        "multiplier": multiplier,
+        "tier_index": idx,
+        "tier_extra": tier_extra,
         "price": price,
     }

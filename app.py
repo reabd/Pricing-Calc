@@ -299,8 +299,8 @@ def api_quotes():
     if delivery_city:
         # Piece count = total physical pieces across the cart (an
         # order_quantity of 3 on one work item is 3 works, not 1) — what
-        # the multiplier tiers actually mean, not the number of distinct
-        # cart entries.
+        # the delivery price's tier step actually means, not the number of
+        # distinct cart entries.
         num_works = sum(w.get("order_quantity", 1) for w in work_items)
         try:
             delivery_result = delivery.compute_delivery(catalog, delivery_city, num_works)
