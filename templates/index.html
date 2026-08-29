@@ -242,6 +242,12 @@
     color: var(--ink-muted); font-size: 0.88rem; border-bottom: 2px solid transparent;
   }
   .tab-btn.active { color: var(--ink); border-bottom-color: var(--accent); }
+  /* Taking a photo of the worksheet only makes sense on a phone in
+     hand at the studio -- hidden on desktop, shown under ~768px. */
+  #photograph-worksheet-btn { display: none; }
+  @media (max-width: 768px) {
+    #photograph-worksheet-btn { display: inline-block; }
+  }
   .tool-panel { display: none; }
   .tool-panel.active { display: block; }
 
@@ -464,7 +470,10 @@
       <button class="tab-btn" data-tab="orderstatus">Order status</button>
       <button class="tab-btn" data-tab="quotehistory">Quote History</button>
       <a class="tab-btn" href="{{ request.script_root }}/api/intake-form/pdf" target="_blank" rel="noopener">Print Meeting Worksheet</a>
+      <button class="tab-btn" id="photograph-worksheet-btn" type="button">📷 Photograph Worksheet</button>
+      <input type="file" id="worksheet-photo-input" accept="image/*" capture="environment" style="display:none;">
     </div>
+    <p class="muted" id="worksheet-photo-status" style="display:none;"></p>
 
     <div class="tool-panel active" id="panel-freetext">
       <p class="muted">Free text, Hebrew or English — several products at once, wood species, paint finishes, whatever doesn't fit a quick-quote card. Example: "2 units 50x70 box frame in cherry wood".</p>
@@ -796,6 +805,32 @@ document.getElementById('stretcher-check').addEventListener('change', (e) => {
     customOverrides['row17_canvas'] = null;
   }
   if (currentJob) performCalculation(); // already showing a result — refresh it live
+});
+
+/* ---------------- Photograph Worksheet (mobile only) ---------------- */
+
+document.getElementById('photograph-worksheet-btn').addEventListener('click', () => {
+  document.getElementById('worksheet-photo-input').click();
+});
+
+document.getElementById('worksheet-photo-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('worksheet-photo-status');
+  statusEl.style.display = 'block';
+  statusEl.innerHTML = '<span class="spinner"></span>Saving photo…';
+  try {
+    const formData = new FormData();
+    formData.append('photo', file);
+    const res = await fetch(API_BASE + '/api/worksheet-photos', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.error) { statusEl.innerHTML = `<span class="error">${data.error}</span>`; return; }
+    statusEl.innerHTML = `<span class="success">Saved. Send it to Claude in your next session to build the quote.</span>`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="error">${err}</span>`;
+  } finally {
+    e.target.value = ''; // allow photographing another one right after
+  }
 });
 
 const grid = document.getElementById('preset-grid');

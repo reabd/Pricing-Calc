@@ -30,8 +30,7 @@ HEADER_FILL = colors.HexColor("#f2f0ea")
 
 NUM_ROWS = 8
 FRAME_TYPES = ["Box Frame", "Float for Canvas", "Aluminum Frame"]
-ADD_ONS_ROW1 = ["Passpartout", "Art Glass", "Double Glass", "Special Color"]
-ADD_ONS_ROW2 = ["Drawing", "Stretcher", "Special Wood"]
+ADD_ONS = ["Passpartout", "Art Glass", "Special Color", "Drawing", "Stretcher", "Special Wood"]
 
 
 def _checkbox(c, x, y, label, size=3.4 * mm, font_size=8.5):
@@ -144,30 +143,30 @@ def build_intake_form(output_path=None):
         for label in FRAME_TYPES:
             cx = _checkbox(c, cx, box_y, label)
 
-        # Lines 3-4: add-on checkboxes, split across two lines so all 7 fit legibly
-        for line_idx, add_ons in enumerate([ADD_ONS_ROW1, ADD_ONS_ROW2]):
-            line_y = row_top - (14.4 + line_idx * 4.7) * mm
-            box_y_addons = line_y - 0.3 * mm
-            c.setFont("NotoSans", 7.5)
-            c.setFillColor(colors.HexColor("#666666"))
-            c.drawString(content_x, line_y + 0.2, "Add-ons:" if line_idx == 0 else "")
-            c.setFillColor(colors.black)
-            cx = content_x + 15 * mm
-            for label in add_ons:
-                if cx > MARGIN + available_w - 20 * mm:
-                    break
-                cx = _checkbox(c, cx, box_y_addons, label, size=3 * mm, font_size=7.8)
+        # Line 3: add-on checkboxes, all in one row
+        line3_y = row_top - 14.4 * mm
+        box_y3 = line3_y - 0.3 * mm
+        c.setFont("NotoSans", 7.5)
+        c.setFillColor(colors.HexColor("#666666"))
+        c.drawString(content_x, line3_y + 0.2, "Add-ons:")
+        c.setFillColor(colors.black)
+        cx = content_x + 15 * mm
+        for label in ADD_ONS:
+            if cx > MARGIN + available_w - 3 * mm:
+                break
+            cx = _checkbox(c, cx, box_y3, label, size=3 * mm, font_size=7.8)
 
-        # Line 5 (if room): notes
+        # Line 4 (if room): notes -- extra gap above it to separate it
+        # visually from the add-on checkboxes (studio owner, 2026-08-27).
         if row_h > 24 * mm:
-            line5_y = row_top - 23.8 * mm
+            line4_y = row_top - 21.4 * mm
             c.setFont("NotoSans", 7.5)
             c.setFillColor(colors.HexColor("#666666"))
-            c.drawString(content_x, line5_y, "Notes:")
+            c.drawString(content_x, line4_y, "Notes:")
             c.setFillColor(colors.black)
             c.setLineWidth(0.4)
             c.setStrokeColor(colors.HexColor("#999999"))
-            c.line(content_x + 11 * mm, line5_y - 0.8, MARGIN + available_w - 3 * mm, line5_y - 0.8)
+            c.line(content_x + 11 * mm, line4_y - 0.8, MARGIN + available_w - 3 * mm, line4_y - 0.8)
 
         row_top = row_bottom
 

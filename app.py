@@ -19,12 +19,13 @@ import secrets
 import shutil
 import threading
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import (Flask, jsonify, redirect, render_template, request, send_file,
+                    send_from_directory, session, url_for)
 
 import business_rules
 import daily_report
@@ -80,6 +81,14 @@ else:
     print(f"[pricing_data] using existing file at {_data_path} (not re-seeding).", flush=True)
 
 catalog = PricingCatalog(_data_path)
+
+# Same persistent-disk convention as PRICING_DATA_PATH/QUOTES_DATA_PATH --
+# photos of filled-in client meeting worksheets (see intake_form_pdf.py),
+# taken with the "Photograph Worksheet" button, saved here so a future
+# session can read them back and build the actual quote.
+_worksheet_photos_dir = Path(os.environ.get("WORKSHEET_PHOTOS_DIR", Path(__file__).resolve().parent / "worksheet_photos"))
+_worksheet_photos_dir.mkdir(parents=True, exist_ok=True)
+_ALLOWED_PHOTO_EXTENSIONS = {"jpg", "jpeg", "png", "heic", "heif", "webp"}
 
 
 def _api_key_authorized():
@@ -384,6 +393,35 @@ def api_intake_form_pdf():
         BytesIO(pdf_bytes), mimetype="application/pdf",
         as_attachment=True, download_name="client-meeting-worksheet.pdf",
     )
+
+
+@app.route("/api/worksheet-photos", methods=["GET", "POST"])
+def api_worksheet_photos():
+    """POST: save a photo of a filled-in client meeting worksheet (from
+    the mobile "Photograph Worksheet" button). GET: list saved photos,
+    most recent first -- used to confirm a photo actually saved, and for
+    a future session to find the latest one to read back."""
+    if request.method == "POST":
+        photo = request.files.get("photo")
+        if not photo or not photo.filename:
+            return jsonify({"error": "No photo uploaded."}), 400
+        ext = photo.filename.rsplit(".", 1)[-1].lower() if "." in photo.filename else "jpg"
+        if ext not in _ALLOWED_PHOTO_EXTENSIONS:
+            ext = "jpg"
+        filename = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}.{ext}"
+        photo.save(_worksheet_photos_dir / filename)
+        return jsonify({"status": "saved", "filename": filename})
+
+    photos = sorted(
+        (p.name for p in _worksheet_photos_dir.iterdir() if p.is_file()),
+        reverse=True,
+    )
+    return jsonify({"photos": photos})
+
+
+@app.route("/api/worksheet-photos/<path:filename>")
+def api_worksheet_photo_file(filename):
+    return send_from_directory(_worksheet_photos_dir, filename)
 
 
 @app.route("/api/price-update/parse", methods=["POST"])
