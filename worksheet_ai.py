@@ -61,7 +61,17 @@ EXTRACT_TOOL = {
                     "type": "object",
                     "properties": {
                         "row_number": {"type": "integer", "description": "The row's printed # (1-8)."},
-                        "work_name": {"type": ["string", "null"]},
+                        "work_name": {
+                            "type": ["string", "null"],
+                            "description": "Your best-effort transcription, even if not fully "
+                                            "confident (this is just a label, not a priced field "
+                                            "-- an imperfect reading is still useful; mark "
+                                            "'work_name' in unclear_fields if you're unsure). "
+                                            "NEVER put a placeholder or description of the "
+                                            "handwriting here (e.g. never 'Hebrew text (unclear)' "
+                                            "or similar) -- transcribe what's actually written, "
+                                            "or use null if truly illegible.",
+                        },
                         "height_cm": {"type": ["number", "null"], "description": "The first size blank."},
                         "width_cm": {"type": ["number", "null"], "description": "The second size blank, after the x."},
                         "frame_type": {
@@ -101,11 +111,19 @@ top, a Client Name line and a Date line, then a table of up to 8 numbered rows. 
   - "Add-ons:" checkboxes -- {", ".join(ADD_ONS)} -- zero or more may be marked
   - "Notes:" a free blank line for anything else
 
-Read carefully -- this feeds a real price quote, so accuracy matters more than completeness. If a
-checkbox mark is ambiguous (a stray pen mark vs. a real check, or it's unclear which of two boxes
-was intended), do not guess: leave the field null and list it in that row's unclear_fields. Same
-for numbers that are illegible or could be two different digits. Skip rows that are entirely
-blank. Report client_name/date as null if that line was left blank."""
+Read carefully -- this feeds a real price quote, so accuracy matters more than completeness for
+anything that affects pricing (checkboxes, sizes). If a checkbox mark is ambiguous (a stray pen
+mark vs. a real check, or it's unclear which of two boxes was intended), do not guess: leave the
+field null and list it in that row's unclear_fields. Same for numbers that are illegible or could
+be two different digits. Skip rows that are entirely blank.
+
+The Work name and client_name/date fields are different -- they're just labels, not priced, so
+give your best-effort transcription even when not fully confident, in whatever language/script
+it's written in (Hebrew, English, or mixed) -- an imperfect reading is still far more useful than
+nothing. Never substitute a placeholder or description of the handwriting (e.g. never write
+something like "Hebrew text (unclear)" as if it were the actual name) -- either transcribe what's
+actually there, or use null and flag it in unclear_fields if truly illegible. Report client_name/
+date as null only if that line was left entirely blank."""
 
 
 def _image_content_block(image_bytes, media_type):
@@ -235,6 +253,22 @@ def _apply_notes(notes, preset_key, components, height_cm, width_cm, catalog):
         slot_key, item_name = extra.get("slot_key"), extra.get("item_name")
         if not slot_key or not item_name:
             continue
+        # A profile size/family mentioned in notes (e.g. "3/6") must not
+        # silently drop a simple->special tier already chosen -- by the
+        # Special Wood checkbox, or by a wood_species notes match just
+        # above -- since that tier lives in the item name itself, and the
+        # free-text parser resolving "3/6" has no way to know about it
+        # (studio owner, 2026-08-29, caught on a real quote: notes
+        # changed the profile family and silently reverted it to simple).
+        if slot_key == "row23_profile_preset" and not item_name.rstrip().lower().endswith("special"):
+            current = next((c["item_name"] for c in components if c["slot_key"] == "row23_profile_preset"), None)
+            if current and current.rstrip().lower().endswith("special"):
+                special_name = business_rules._swap_tier_suffix(item_name, "special")
+                try:
+                    catalog.find_item(slot_key, special_name)
+                    item_name = special_name
+                except PricingError:
+                    pass  # no special variant of this family -- keep the simple one
         try:
             catalog.find_item(slot_key, item_name)
         except PricingError as e:
