@@ -14,6 +14,7 @@ pricing itself.
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
@@ -39,15 +40,19 @@ STUDIO_NAME = "The Print House"
 STUDIO_ADDRESS_LINE = "The Print House LTD, Hazerem 1 St. Tel Aviv, ISRAEL, VAT no. 514717255"
 STUDIO_CONTACT_LINE = "T 03-6855362   E Info@theprinthouse.co.il   W www.theprinthouse.co.il"
 
-# Only "dropdown"-kind slots represent a real client-facing choice; the
-# "fixed"-kind rows (Lamelo, Upper Lamela, Wood/Paper/Passpartout Glyph,
-# etc.) are internal structural/bookkeeping line items with a single
-# always-present item each -- the reference document never mentions them
-# either, so they're deliberately left out of the description text.
+# Mostly "dropdown"-kind slots, since those represent a real client-facing
+# choice -- the internal structural/bookkeeping "fixed"-kind rows (Lamelo,
+# Upper Lamela, Wood/Paper/Passpartout Glyph, etc.) stay deliberately left
+# out of the description text, the reference document never mentions them
+# either. row17_canvas (Stretcher) is the one deliberate exception: it's
+# "fixed"-kind but a real, visible, chargeable add-on the client should
+# see acknowledged on their quote, not silently folded into the total
+# (studio owner, 2026-08-29, after a stretcher's price wasn't showing up
+# anywhere on a printed quote and they assumed it hadn't been charged).
 PRINT_SLOTS = {"row11_paper", "row33_uv_print", "row34_uv_facemount"}
 MOUNT_SLOTS = {"row29_front_material", "row30_back_material", "row31_back_frame"}
 FRAME_SLOTS = {"row23_profile_preset", "row24_glasses", "row25_double_glass",
-                "row26_passpartout", "row27_paint", "row28_drawing"}
+                "row26_passpartout", "row27_paint", "row28_drawing", "row17_canvas"}
 
 PAGE_SIZE = A4
 MARGIN = 18 * mm
@@ -179,6 +184,15 @@ def build_quote_pdf(quote, output_path=None):
     subtotal = 0.0
     for i, entry in enumerate(quote["work_items"], start=1):
         desc_lines = describe_work_item(entry)
+        # entry["description"] holds the work's own name (e.g. from a
+        # photographed client-meeting worksheet's "Work:" line) -- shown
+        # as a bold heading above the Print/Mount/Frame breakdown so the
+        # client can tell which piece each row is (studio owner,
+        # 2026-08-29). Empty for quotes built the usual way through the
+        # quick-quote UI, which never sets this field.
+        work_name = (entry.get("description") or "").strip()
+        if work_name:
+            desc_lines = [f"<b>{escape(work_name)}</b>"] + desc_lines
         desc_html = "<br/>".join(desc_lines) if desc_lines else "—"
         size_str = f"{entry['height_cm']:g} x {entry['width_cm']:g}"
         total = entry["quantity_price"]

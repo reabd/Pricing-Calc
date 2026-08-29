@@ -194,10 +194,13 @@ def map_to_quote_lines(items, catalog):
         for add_on in add_ons:
             if add_on == "Passpartout":
                 if preset_key in ("box", "aluminium"):
-                    components += [
-                        {"slot_key": "row26_passpartout", "item_name": "Museum Book 4ply"},
-                        {"slot_key": "row11_paper", "item_name": "Fine Art"},
-                    ]
+                    # Framing-only -- the client meeting worksheet is for
+                    # pricing a frame around a piece the client already
+                    # has, not a new print job, so (unlike the quick-quote
+                    # UI's "+Passpartout" variant) this deliberately does
+                    # NOT bundle in a print/paper component (studio owner,
+                    # 2026-08-29).
+                    components.append({"slot_key": "row26_passpartout", "item_name": "Museum Book 4ply"})
                 else:
                     warnings.append("Passpartout doesn't apply to Float for Canvas -- ignored.")
             elif add_on == "Art Glass":
