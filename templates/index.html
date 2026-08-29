@@ -500,6 +500,7 @@
       <button class="tab-btn" id="photograph-worksheet-btn" type="button">📷 Photograph Worksheet</button>
       <input type="file" id="worksheet-photo-input" accept="image/*" capture="environment" style="display:none;">
     </div>
+    <div id="worksheet-save-photos-container"></div>
     <p class="muted" id="worksheet-photo-status" style="display:none;"></p>
     <div id="worksheet-review" style="display:none;"></div>
 
@@ -849,6 +850,22 @@ document.getElementById('worksheet-photo-input').addEventListener('change', asyn
   statusEl.style.display = 'block';
   reviewEl.style.display = 'none';
   reviewEl.innerHTML = '';
+  // Taking this photo through the camera <input> hands it straight to the
+  // page -- it's never added to the phone's own Photos library the way a
+  // normal camera-app shot would be (studio owner, 2026-08-29). It IS
+  // always safely saved on the server regardless (see the upload below),
+  // but offer a one-tap way to also drop a copy in Photos, via the native
+  // share sheet, for anyone who wants their own copy too. Lives in its
+  // own container (not statusEl) so the upload/analysis status messages
+  // below don't wipe it out.
+  const savePhotosContainer = document.getElementById('worksheet-save-photos-container');
+  savePhotosContainer.innerHTML = '';
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    savePhotosContainer.innerHTML = '<button type="button" class="action" id="worksheet-save-photos-btn">💾 Also Save to Photos</button>';
+    document.getElementById('worksheet-save-photos-btn').addEventListener('click', () => {
+      navigator.share({ files: [file], title: 'Worksheet photo' }).catch(() => {});
+    });
+  }
   statusEl.innerHTML = '<span class="spinner"></span>Saving photo and reading it…';
   try {
     const formData = new FormData();
