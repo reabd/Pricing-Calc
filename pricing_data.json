@@ -313,7 +313,7 @@
       "items": {
         "Stretcher": {
           "fixed_material_cost": 0,
-          "var_material_cost": 200,
+          "var_material_cost": 78.97,
           "material_indirect": 0.5,
           "material_risk": 0.3,
           "material_profit": 0.3,
