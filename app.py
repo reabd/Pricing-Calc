@@ -33,6 +33,7 @@ import email_ai
 import email_learning
 import email_sender
 import imap_client
+import intake_form_pdf
 import llm_parser
 import item_numbering
 import monday_client
@@ -370,6 +371,18 @@ def api_quote_pdf(quote_number):
     return send_file(
         BytesIO(pdf_bytes), mimetype="application/pdf",
         as_attachment=True, download_name=f"quote-{quote_number}.pdf",
+    )
+
+
+@app.route("/api/intake-form/pdf")
+def api_intake_form_pdf():
+    """Blank printable worksheet for filling out by hand during a client
+    meeting -- see intake_form_pdf.py. No quote data involved, so no
+    login-adjacent lookups needed beyond the usual auth gate."""
+    pdf_bytes = intake_form_pdf.build_intake_form()
+    return send_file(
+        BytesIO(pdf_bytes), mimetype="application/pdf",
+        as_attachment=True, download_name="client-meeting-worksheet.pdf",
     )
 
 
