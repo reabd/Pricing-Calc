@@ -112,27 +112,37 @@ def build_intake_form(output_path=None):
         content_x = MARGIN + num_col_w + 3 * mm
         content_w = content_col_w - 6 * mm
 
+        # Even vertical spacing between all four lines in the row --
+        # matches the gap the studio owner liked between Add-ons and
+        # Notes, applied consistently everywhere rather than just there
+        # (studio owner, 2026-08-27). Line lengths themselves are back to
+        # their original widths -- "more space" meant breathing room
+        # between lines, not wider fill-in blanks.
+        LINE_GAP = 7.0 * mm
+        line1_y = row_top - 4.5 * mm
+        line2_y = line1_y - LINE_GAP
+        line3_y = line2_y - LINE_GAP
+        line4_y = line3_y - LINE_GAP
+
         # Line 1: work name + size
-        line1_y = row_top - 5.0 * mm
         c.setFont("NotoSans", 8.5)
         c.drawString(content_x, line1_y, "Work:")
         c.setLineWidth(0.4)
         c.setStrokeColor(colors.HexColor("#999999"))
-        name_line_end = content_x + content_w * 0.62
+        name_line_end = content_x + content_w * 0.55
         c.line(content_x + 11 * mm, line1_y - 0.8, name_line_end, line1_y - 0.8)
         size_x = name_line_end + 4 * mm
         c.setFont("NotoSans", 8.5)
         c.drawString(size_x, line1_y, "Size:")
-        c.line(size_x + 9 * mm, line1_y - 0.8, size_x + 27 * mm, line1_y - 0.8)
-        c.drawString(size_x + 28 * mm, line1_y, "x")
-        c.line(size_x + 31 * mm, line1_y - 0.8, size_x + 49 * mm, line1_y - 0.8)
+        c.line(size_x + 9 * mm, line1_y - 0.8, size_x + 24 * mm, line1_y - 0.8)
+        c.drawString(size_x + 25 * mm, line1_y, "x")
+        c.line(size_x + 28 * mm, line1_y - 0.8, size_x + 43 * mm, line1_y - 0.8)
         c.setFont("NotoSans", 7.5)
         c.setFillColor(colors.HexColor("#666666"))
-        c.drawString(size_x + 50 * mm, line1_y, "cm")
+        c.drawString(size_x + 44 * mm, line1_y, "cm")
         c.setFillColor(colors.black)
 
         # Line 2: frame type checkboxes
-        line2_y = row_top - 9.7 * mm
         box_y = line2_y - 0.3 * mm
         cx = content_x
         c.setFont("NotoSans", 7.5)
@@ -144,7 +154,6 @@ def build_intake_form(output_path=None):
             cx = _checkbox(c, cx, box_y, label)
 
         # Line 3: add-on checkboxes, all in one row
-        line3_y = row_top - 14.4 * mm
         box_y3 = line3_y - 0.3 * mm
         c.setFont("NotoSans", 7.5)
         c.setFillColor(colors.HexColor("#666666"))
@@ -156,10 +165,8 @@ def build_intake_form(output_path=None):
                 break
             cx = _checkbox(c, cx, box_y3, label, size=3 * mm, font_size=7.8)
 
-        # Line 4 (if room): notes -- extra gap above it to separate it
-        # visually from the add-on checkboxes (studio owner, 2026-08-27).
+        # Line 4 (if room): notes
         if row_h > 24 * mm:
-            line4_y = row_top - 21.4 * mm
             c.setFont("NotoSans", 7.5)
             c.setFillColor(colors.HexColor("#666666"))
             c.drawString(content_x, line4_y, "Notes:")
