@@ -735,26 +735,38 @@ def api_catalog_sync_new_items():
     nothing on a deployment with an existing persistent-disk file until
     this runs.
 
-    Slots/items are additive-only: never overwrites an existing
-    slot/item, so hand-edited prices already live on the persistent disk
-    (via the Price List tab) are never touched. Presets, delivery cities,
-    and delivery_rates are different — there is no UI path to hand-edit
-    any of those, so a changed one is safe to sync outright (updated_presets
-    / updated_cities / updated_delivery_rates) rather than only adding
-    brand-new keys. Same login/API-key gate as the rest of the app.
+    Items are additive-only: never overwrites an existing item, so
+    hand-edited prices already live on the persistent disk (via the Price
+    List tab) are never touched. A slot's own metadata (label, size_mode,
+    default_item, ...) has no such UI path, so it's synced outright like
+    presets/cities/delivery_rates (updated_slots) — this is what lets a
+    slot be renamed/repurposed (e.g. row17_canvas -> "Stretcher") without
+    losing whatever items already live on it. Same login/API-key gate as
+    the rest of the app.
     """
     bundled = PricingCatalog(_bundled_data_path)
-    added_slots, added_items = [], []
+    added_slots, added_items, updated_slots = [], [], []
+    metadata_fields = ("label", "size_mode", "default_item", "category", "subcategory",
+                        "scales_with_quantity", "row", "kind", "product")
     for key, slot in bundled.slots.items():
         if key not in catalog.slots:
             catalog.slots[key] = slot
             added_slots.append(key)
         else:
-            live_items = catalog.slots[key]["items"]
+            live_slot = catalog.slots[key]
+            live_items = live_slot["items"]
             for item_name, item in slot["items"].items():
                 if item_name not in live_items:
                     live_items[item_name] = item
                     added_items.append(f"{key}:{item_name}")
+            # Slot metadata (label/size_mode/default_item/...) has no Price
+            # List UI path to hand-edit, same reasoning as presets below --
+            # safe to sync outright rather than only adding brand-new keys.
+            # Items themselves stay additive-only (handled above).
+            if any(live_slot.get(f) != slot.get(f) for f in metadata_fields):
+                for f in metadata_fields:
+                    live_slot[f] = slot.get(f)
+                updated_slots.append(key)
     added_presets, updated_presets = [], []
     for key, preset in bundled.presets.items():
         if key not in catalog.presets:
@@ -777,11 +789,11 @@ def api_catalog_sync_new_items():
     if catalog.delivery_rates != bundled.delivery_rates:
         catalog.delivery_rates = bundled.delivery_rates
         updated_delivery_rates = True
-    if (added_slots or added_presets or added_items or updated_presets
+    if (added_slots or added_presets or added_items or updated_presets or updated_slots
             or added_cities or updated_cities or updated_delivery_rates):
         catalog.save()
     return jsonify({
-        "added_slots": added_slots, "added_items": added_items,
+        "added_slots": added_slots, "added_items": added_items, "updated_slots": updated_slots,
         "added_presets": added_presets, "updated_presets": updated_presets,
         "added_cities": added_cities, "updated_cities": updated_cities,
         "updated_delivery_rates": updated_delivery_rates,

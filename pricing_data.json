@@ -306,20 +306,20 @@
       "product": "Frame",
       "category": "General",
       "subcategory": null,
-      "label": "Canvas",
-      "size_mode": "perimeter",
+      "label": "Stretcher",
+      "size_mode": "stretcher_perimeter",
       "scales_with_quantity": true,
-      "default_item": "Canvas",
+      "default_item": "Stretcher",
       "items": {
-        "Canvas": {
+        "Stretcher": {
           "fixed_material_cost": 0,
-          "var_material_cost": 6,
+          "var_material_cost": 200,
           "material_indirect": 0.5,
           "material_risk": 0.3,
           "material_profit": 0.3,
-          "var_effort_cost": 45,
-          "fixed_effort_cost": 21,
-          "min_effort_cost": 51,
+          "var_effort_cost": 0,
+          "fixed_effort_cost": 0,
+          "min_effort_cost": 0,
           "effort_indirect": 0.5,
           "effort_risk": 0.45,
           "effort_profit": 0.3
@@ -3289,6 +3289,10 @@
         {
           "slot_key": "row32_simple_wrap",
           "item_name": "Simple Wrap"
+        },
+        {
+          "slot_key": "row17_canvas",
+          "item_name": "Stretcher"
         }
       ],
       "unsupported_rows": []

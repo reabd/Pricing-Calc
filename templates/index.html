@@ -383,6 +383,9 @@
       <label class="quick-checkbox" id="back-frame-row" style="display:none;">
         <input type="checkbox" id="back-frame-check"> <span>Back Frame</span>
       </label>
+      <label class="quick-checkbox" id="stretcher-row" style="display:none;">
+        <input type="checkbox" id="stretcher-check"> <span>Stretcher</span>
+      </label>
       <div id="options-groups"></div>
       <div class="measure-row" id="measure-row-normal">
         <div class="field">
@@ -682,6 +685,12 @@ const BACK_FRAME_CARDS = ['uv_print'];
 // Defaults to true — "the default is with back frame" (studio owner).
 let backFrameChecked = true;
 
+// Cards where the Stretcher (canvas stretcher bars) is part of the preset
+// by default, but removable via a checkbox (e.g. the client supplies an
+// already-stretched canvas).
+const STRETCHER_CARDS = ['canvas'];
+let stretcherChecked = true;
+
 function renderOptionGroups(variant) {
   customOverrides = {};
 
@@ -703,6 +712,15 @@ function renderOptionGroups(variant) {
     customOverrides['row31_back_frame'] = null; // Simple Wrap stays regardless — it's not tied to Back Frame
   }
   backFrameRow.style.display = onBackFrameCard ? 'flex' : 'none';
+
+  const stretcherRow = document.getElementById('stretcher-row');
+  const stretcherCheckbox = document.getElementById('stretcher-check');
+  const onStretcherCard = STRETCHER_CARDS.includes(selectedPreset);
+  stretcherCheckbox.checked = stretcherChecked;
+  if (onStretcherCard && !stretcherChecked) {
+    customOverrides['row17_canvas'] = null;
+  }
+  stretcherRow.style.display = onStretcherCard ? 'flex' : 'none';
 
   const container = document.getElementById('options-groups');
   container.innerHTML = '';
@@ -769,6 +787,16 @@ document.getElementById('back-frame-check').addEventListener('change', (e) => {
   if (currentJob) performCalculation(); // already showing a result — refresh it live
 });
 
+document.getElementById('stretcher-check').addEventListener('change', (e) => {
+  stretcherChecked = e.target.checked;
+  if (stretcherChecked) {
+    delete customOverrides['row17_canvas'];
+  } else {
+    customOverrides['row17_canvas'] = null;
+  }
+  if (currentJob) performCalculation(); // already showing a result — refresh it live
+});
+
 const grid = document.getElementById('preset-grid');
 QUICK_PRESETS.forEach(p => {
   const btn = document.createElement('button');
@@ -794,6 +822,7 @@ function selectPreset(p) {
   document.getElementById('variant-row').style.display = isDelivery ? 'none' : '';
   document.getElementById('art-glass-row').style.display = isDelivery ? 'none' : document.getElementById('art-glass-row').style.display;
   document.getElementById('back-frame-row').style.display = isDelivery ? 'none' : document.getElementById('back-frame-row').style.display;
+  document.getElementById('stretcher-row').style.display = isDelivery ? 'none' : document.getElementById('stretcher-row').style.display;
   document.getElementById('options-groups').style.display = isDelivery ? 'none' : '';
   if (isDelivery) {
     // If the cart already has real work items, default the works count to

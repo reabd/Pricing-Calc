@@ -193,6 +193,21 @@ def compute_size(size_mode, height_cm, width_cm):
         return (height_cm * width_cm) / 10000
     if size_mode == "manual_hours":
         return 0.0
+    if size_mode == "stretcher_perimeter":
+        # Canvas stretcher bars: the outer perimeter, plus internal cross
+        # bars once the canvas is big enough to need bracing -- one cross
+        # bar from 120cm on the long side, a second past 200cm (studio
+        # owner, 2026-08-27). Each cross bar spans the short side (it
+        # braces the two long bars against each other).
+        long_side = max(height_cm, width_cm)
+        short_side = min(height_cm, width_cm)
+        if long_side > 200:
+            cross_bars = 2
+        elif long_side >= 120:
+            cross_bars = 1
+        else:
+            cross_bars = 0
+        return ((height_cm + width_cm) * 2 + cross_bars * short_side) / 100
     raise PricingError(f"Unknown size_mode: {size_mode!r}")
 
 
