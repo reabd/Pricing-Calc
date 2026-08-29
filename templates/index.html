@@ -246,6 +246,20 @@
   .quote-history-row .qh-client { flex: 1; }
   .quote-history-row .qh-date { color: var(--ink-muted); white-space: nowrap; }
   .quote-history-row .qh-total { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .qh-edit-btn {
+    font-family: inherit; font-size: 0.82rem; background: none; border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 3px 10px; cursor: pointer; color: var(--ink-muted);
+  }
+  .qh-edit-btn:hover { color: var(--ink); border-color: var(--ink-muted); }
+  .quote-edit-panel {
+    padding: 12px 0 16px; margin-bottom: 6px; border-bottom: 1px solid var(--line);
+  }
+  .qe-item {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 0.85rem;
+  }
+  .qe-item-desc { flex: 1; color: var(--ink-muted); }
+  .qe-item-h, .qe-item-w, .qe-item-q { width: 60px; }
+  .qe-item-price { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
 
   /* --- secondary tools --- */
   section.tools { border-top: 1px solid var(--line); padding-top: 32px; }
@@ -1295,14 +1309,21 @@ async function loadQuoteHistory(clientFilter) {
     const data = await res.json();
     if (!data.quotes.length) { listEl.innerHTML = '<div class="muted">No quotes yet.</div>'; return; }
     listEl.innerHTML = data.quotes.map(q => `
-      <div class="quote-history-row">
-        <span class="qh-number">#${q.quote_number}</span>
-        <span class="qh-client">${escapeHtml(q.client_name)}</span>
-        <span class="qh-date">${q.created_date}</span>
-        <span class="qh-total">${fmt(q.grand_total_incl_vat)}</span>
-        <a href="${API_BASE}/api/quotes/${q.quote_number}/pdf" target="_blank">PDF</a>
+      <div>
+        <div class="quote-history-row">
+          <span class="qh-number">#${q.quote_number}</span>
+          <span class="qh-client">${escapeHtml(q.client_name)}</span>
+          <span class="qh-date">${q.created_date}</span>
+          <span class="qh-total">${fmt(q.grand_total_incl_vat)}</span>
+          <a href="${API_BASE}/api/quotes/${q.quote_number}/pdf" target="_blank">PDF</a>
+          <button type="button" class="qh-edit-btn" data-quote="${q.quote_number}">Edit</button>
+        </div>
+        <div class="quote-edit-panel" id="edit-panel-${q.quote_number}" style="display:none;"></div>
       </div>
     `).join('');
+    listEl.querySelectorAll('.qh-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => toggleQuoteEdit(parseInt(btn.dataset.quote, 10)));
+    });
   } catch (e) {
     listEl.innerHTML = `<div class="error">${e}</div>`;
   }
@@ -1311,6 +1332,74 @@ async function loadQuoteHistory(clientFilter) {
 document.getElementById('quote-history-search').addEventListener('input', (e) => {
   loadQuoteHistory(e.target.value.trim());
 });
+
+async function toggleQuoteEdit(quoteNumber) {
+  const panel = document.getElementById(`edit-panel-${quoteNumber}`);
+  if (panel.style.display === 'block') { panel.style.display = 'none'; panel.innerHTML = ''; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = '<span class="spinner"></span>Loading…';
+  const res = await fetch(API_BASE + `/api/quotes/${quoteNumber}`);
+  const quote = await res.json();
+  if (quote.error) { panel.innerHTML = `<div class="error">${quote.error}</div>`; return; }
+  renderQuoteEditPanel(quoteNumber, quote);
+}
+
+function renderQuoteEditPanel(quoteNumber, quote) {
+  const panel = document.getElementById(`edit-panel-${quoteNumber}`);
+  const itemsHtml = quote.work_items.map((item, idx) => `
+    <div class="qe-item">
+      <span class="qe-item-desc">${escapeHtml(item.description || `Item ${idx + 1}`)}</span>
+      <input type="number" class="qe-item-h" data-idx="${idx}" value="${item.height_cm}" step="0.5" min="1"> ×
+      <input type="number" class="qe-item-w" data-idx="${idx}" value="${item.width_cm}" step="0.5" min="1"> cm ×
+      <input type="number" class="qe-item-q" data-idx="${idx}" value="${item.order_quantity}" step="1" min="1">
+      <span class="qe-item-price">${fmt(item.quantity_price)}</span>
+    </div>
+  `).join('');
+  panel.innerHTML = `
+    <div class="cart-client-fields" style="margin-top:8px;">
+      <div class="field"><label>Client name</label><input type="text" id="qe-name-${quoteNumber}" value="${escapeHtml(quote.client_name)}"></div>
+      <div class="field"><label>Phone</label><input type="text" id="qe-phone-${quoteNumber}" value="${escapeHtml(quote.client_phone || '')}"></div>
+      <div class="field"><label>Email</label><input type="text" id="qe-email-${quoteNumber}" value="${escapeHtml(quote.client_email || '')}"></div>
+      <div class="field"><label>Discount %</label><input type="number" id="qe-discount-${quoteNumber}" value="${quote.discount_percent || 0}" style="width:70px;"></div>
+    </div>
+    <div class="qe-items">${itemsHtml}</div>
+    <button type="button" class="action" id="qe-save-${quoteNumber}" style="margin-top:10px;">Save Changes</button>
+    <span id="qe-status-${quoteNumber}"></span>
+  `;
+
+  document.getElementById(`qe-save-${quoteNumber}`).addEventListener('click', async () => {
+    const statusEl = document.getElementById(`qe-status-${quoteNumber}`);
+    statusEl.innerHTML = '<span class="spinner"></span>Saving…';
+    const item_edits = [];
+    quote.work_items.forEach((item, idx) => {
+      const h = parseFloat(panel.querySelector(`.qe-item-h[data-idx="${idx}"]`).value);
+      const w = parseFloat(panel.querySelector(`.qe-item-w[data-idx="${idx}"]`).value);
+      const qty = parseFloat(panel.querySelector(`.qe-item-q[data-idx="${idx}"]`).value);
+      if (h !== item.height_cm || w !== item.width_cm || qty !== item.order_quantity) {
+        item_edits.push({ index: idx, height_cm: h, width_cm: w, order_quantity: qty });
+      }
+    });
+    const body = {
+      client_name: document.getElementById(`qe-name-${quoteNumber}`).value.trim(),
+      client_phone: document.getElementById(`qe-phone-${quoteNumber}`).value.trim(),
+      client_email: document.getElementById(`qe-email-${quoteNumber}`).value.trim(),
+      discount_percent: parseFloat(document.getElementById(`qe-discount-${quoteNumber}`).value) || 0,
+    };
+    if (item_edits.length) body.item_edits = item_edits;
+    try {
+      const res = await fetch(API_BASE + `/api/quotes/${quoteNumber}/update`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+      });
+      const updated = await res.json();
+      if (updated.error) { statusEl.innerHTML = `<span class="error">${updated.error}</span>`; return; }
+      statusEl.innerHTML = '<span class="success">Saved.</span>';
+      renderQuoteEditPanel(quoteNumber, updated);
+      loadQuoteHistory(document.getElementById('quote-history-search').value.trim());
+    } catch (e) {
+      statusEl.innerHTML = `<span class="error">${e}</span>`;
+    }
+  });
+}
 
 function handleCalculateClick() {
   const h = parseFloat(document.getElementById('in-height').value);

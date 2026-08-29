@@ -84,6 +84,52 @@ def get_quote(quote_number):
     return _load()["quotes"].get(str(quote_number))
 
 
+def update_quote(quote_number, client_name=None, client_phone=None, client_email=None,
+                  discount_percent=None, work_items=None):
+    """
+    Edits an already-saved quote in place -- client info and/or its full
+    work_items list (see api_quote_update in app.py: re-pricing an
+    individual item, e.g. after a mis-measured size, happens there before
+    calling this; this function just replaces the list and recomputes
+    totals, the same math create_quote() uses). None for any field means
+    "leave as-is". Raises ValueError (same as create_quote) if the quote
+    doesn't exist or a new value is invalid.
+    """
+    data = _load()
+    quote = data["quotes"].get(str(quote_number))
+    if not quote:
+        raise ValueError(f"Quote #{quote_number} not found.")
+
+    if client_name is not None:
+        if not client_name.strip():
+            raise ValueError("client_name is required")
+        quote["client_name"] = client_name.strip()
+    if client_phone is not None:
+        quote["client_phone"] = client_phone.strip() or None
+    if client_email is not None:
+        quote["client_email"] = client_email.strip() or None
+    if discount_percent is not None:
+        discount_percent = float(discount_percent)
+        if not 0 <= discount_percent < 100:
+            raise ValueError("discount_percent must be between 0 and 100")
+        quote["discount_percent"] = discount_percent
+    if work_items is not None:
+        if not work_items:
+            raise ValueError("work_items must have at least one item")
+        quote["work_items"] = work_items
+
+    subtotal = sum(w["quantity_price"] for w in quote["work_items"])
+    delivery_price = quote["delivery"]["price"] if quote.get("delivery") else 0
+    grand_total = subtotal * (1 - quote.get("discount_percent", 0) / 100) + delivery_price
+    quote["subtotal_pre_discount"] = round(subtotal, 2)
+    quote["grand_total_pre_vat"] = round(grand_total, 2)
+    quote["grand_total_incl_vat"] = round(grand_total * (1 + quote.get("vat_rate", 0.18)), 2)
+
+    data["quotes"][str(quote_number)] = quote
+    _save(data)
+    return quote
+
+
 def list_quotes(client_name=None):
     quotes = list(_load()["quotes"].values())
     if client_name:

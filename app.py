@@ -372,6 +372,65 @@ def api_quote_detail(quote_number):
     return jsonify(quote)
 
 
+@app.route("/api/quotes/<int:quote_number>/update", methods=["POST"])
+def api_quote_update(quote_number):
+    """
+    Edits an already-saved quote -- client info, and/or a mis-measured
+    item's height/width/quantity (studio owner, 2026-08-29: "even if I
+    see a mistake in measures, I can edit and update the right size").
+
+    item_edits (optional): [{index, height_cm, width_cm, order_quantity}]
+    -- re-prices that work_item from scratch using its OWN already-priced
+    lines' slot_key/item_name as the explicit component list (preset_key
+    left out, so resolve_components_dict() uses them as-is -- no need to
+    know or re-derive which preset/add-ons originally built it), just
+    with the corrected size/quantity. Everything else about the quote
+    (client fields, discount, delivery, other items) is untouched unless
+    also included in the request.
+    """
+    quote = quote_store.get_quote(quote_number)
+    if not quote:
+        return jsonify({"error": f"Quote #{quote_number} not found."}), 404
+
+    data = request.json or {}
+    work_items = list(quote["work_items"])
+    for edit in data.get("item_edits") or []:
+        idx = edit.get("index")
+        if idx is None or not (0 <= idx < len(work_items)):
+            return jsonify({"error": f"Invalid item index: {idx!r}"}), 400
+        old_item = work_items[idx]
+        components = [
+            JobComponentRequest(l["slot_key"], l["item_name"], l.get("quantity", 1.0))
+            for l in old_item["lines"] if not l.get("unpriced")
+        ]
+        height_cm = edit.get("height_cm", old_item["height_cm"])
+        width_cm = edit.get("width_cm", old_item["width_cm"])
+        order_quantity = edit.get("order_quantity", old_item["order_quantity"])
+        try:
+            result = price_job(catalog, components, height_cm=height_cm, width_cm=width_cm,
+                                order_quantity=order_quantity)
+        except PricingError as e:
+            return jsonify({"error": str(e)}), 400
+        new_item = line_result_to_dict(result)
+        new_item["description"] = old_item.get("description", "")
+        new_item["height_cm"] = height_cm
+        new_item["width_cm"] = width_cm
+        work_items[idx] = new_item
+
+    try:
+        updated = quote_store.update_quote(
+            quote_number,
+            client_name=data.get("client_name"),
+            client_phone=data.get("client_phone"),
+            client_email=data.get("client_email"),
+            discount_percent=data.get("discount_percent"),
+            work_items=work_items if data.get("item_edits") else None,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(updated)
+
+
 @app.route("/api/quotes/<int:quote_number>/pdf")
 def api_quote_pdf(quote_number):
     quote = quote_store.get_quote(quote_number)
