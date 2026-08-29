@@ -118,8 +118,11 @@ def build_intake_form(output_path=None):
         # (studio owner, 2026-08-27). Line lengths themselves are back to
         # their original widths -- "more space" meant breathing room
         # between lines, not wider fill-in blanks.
-        LINE_GAP = 7.0 * mm
-        line1_y = row_top - 4.5 * mm
+        # 4 equal gaps (row-top->line1, then between each line) have to
+        # fit inside row_h -- 6.5mm keeps a little breathing room at the
+        # bottom of the row instead of running flush against its border.
+        LINE_GAP = 6.5 * mm
+        line1_y = row_top - LINE_GAP
         line2_y = line1_y - LINE_GAP
         line3_y = line2_y - LINE_GAP
         line4_y = line3_y - LINE_GAP
