@@ -22,6 +22,8 @@ import os
 
 import anthropic
 
+import business_rules
+import llm_parser
 from pricing_engine import PricingError
 
 MODEL = "claude-sonnet-5"
@@ -164,6 +166,86 @@ _DEFAULT_PROFILE = {
 }
 
 
+def _apply_notes(notes, preset_key, components, height_cm, width_cm, catalog):
+    """
+    A row's free-text Notes line can specify things no checkbox covers --
+    a wood species, a specific paint finish, an extra component ("with
+    double glass", etc.). Reuses llm_parser.parse_quote_request() (the
+    same free-text->catalog understanding behind "Describe it in your
+    own words") rather than a separate prompt: the notes text plus this
+    row's already-known frame type/size is handed to it as if it were a
+    normal free-text request, and only wood_species/paint_method/
+    components are taken from its answer -- preset_key/height_cm/
+    width_cm are already settled from the checkboxes and never
+    overridden by this (studio owner, 2026-08-29).
+
+    Mutates and returns `components` (a list, same convention as the
+    add-on branches above: later entries for the same slot_key win when
+    merged by resolve_components_dict). Returns (components, warnings).
+    """
+    warnings = []
+    base_preset_key = preset_key.replace("_drawing", "")
+    frame_label = next((label for label, key in _FRAME_TYPE_TO_PRESET.items() if key == base_preset_key), preset_key)
+    text = f"{frame_label}, {height_cm}x{width_cm} cm. {notes}"
+    try:
+        parsed = llm_parser.parse_quote_request(text, catalog)
+    except Exception as e:
+        warnings.append(f"Notes: couldn't interpret ({e}) -- ignored, check it manually.")
+        return components, warnings
+
+    if parsed.get("clarification_needed"):
+        warnings.append(f"Notes: {parsed['clarification_needed']}")
+        return components, warnings
+    lines = parsed.get("lines") or []
+    if not lines:
+        return components, warnings
+    line = lines[0]
+
+    wood_species = line.get("wood_species")
+    paint_method = line.get("paint_method")
+    if wood_species or paint_method:
+        try:
+            effective = catalog.resolve_components_dict(preset_key, components)
+            updated, error = business_rules.apply_wood_paint_rules(
+                catalog, effective, wood_species=wood_species, paint_method=paint_method,
+            )
+            if error:
+                warnings.append(f"Notes: {error}")
+            else:
+                # apply_wood_paint_rules() always rewrites row27_paint --
+                # even to a generic default -- whenever it touches
+                # row27_paint at all, which is correct for the free-text
+                # flow (an explicit new request) but wrong here: a wood
+                # species mentioned with no paint opinion must not reset
+                # an already-chosen paint (e.g. from the Special Color
+                # checkbox) back to a default nobody asked for (studio
+                # owner, 2026-08-29, caught before shipping). Only take
+                # the profile-tier swap unconditionally; only take the
+                # paint change if paint_method was actually given.
+                if "row23_profile_preset" in updated:
+                    components = [c for c in components if c["slot_key"] != "row23_profile_preset"]
+                    components.append({"slot_key": "row23_profile_preset", "item_name": updated["row23_profile_preset"]["item_name"]})
+                if paint_method and "row27_paint" in updated:
+                    components = [c for c in components if c["slot_key"] != "row27_paint"]
+                    components.append({"slot_key": "row27_paint", "item_name": updated["row27_paint"]["item_name"]})
+        except PricingError as e:
+            warnings.append(f"Notes: {e}")
+
+    for extra in line.get("components") or []:
+        slot_key, item_name = extra.get("slot_key"), extra.get("item_name")
+        if not slot_key or not item_name:
+            continue
+        try:
+            catalog.find_item(slot_key, item_name)
+        except PricingError as e:
+            warnings.append(f"Notes: {e}")
+            continue
+        components = [c for c in components if c["slot_key"] != slot_key]
+        components.append({"slot_key": slot_key, "item_name": item_name})
+
+    return components, warnings
+
+
 def map_to_quote_lines(items, catalog):
     """
     items: the `items` list from extract_worksheet()'s output.
@@ -239,6 +321,11 @@ def map_to_quote_lines(items, catalog):
         width_cm = item.get("width_cm")
         if not height_cm or not width_cm:
             warnings.append("Missing height or width -- can't price this row yet.")
+
+        notes = (item.get("notes") or "").strip()
+        if notes and preset_key and height_cm and width_cm:
+            components, notes_warnings = _apply_notes(notes, preset_key, components, height_cm, width_cm, catalog)
+            warnings += notes_warnings
 
         parsed_line = None
         if preset_key and height_cm and width_cm:
