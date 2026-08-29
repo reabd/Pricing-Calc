@@ -11,6 +11,7 @@ lines[]/quantity_price/final_price_incl_vat) -- this module only formats
 and lays out numbers/text that are already computed elsewhere; it does no
 pricing itself.
 """
+import re
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -32,9 +33,31 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 # is registered once at import time rather than relying on any system font
 # -- a font installed only on this Mac wouldn't exist on Render's Linux
 # container, which is what actually generates these PDFs in production.
+#
+# Noto Sans itself has ZERO Hebrew glyphs despite the "full Unicode
+# coverage" claim above -- confirmed via fontTools after a real quote's
+# Hebrew work names rendered as blank space, not even a black box (studio
+# owner, 2026-08-29). Noto Sans Hebrew (same OFL license) is a separate
+# family; static Regular/Bold instances extracted from Google Fonts'
+# variable-font release via fontTools.varLib.instancer, since only a
+# single [wdth,wght]-axis file is published upstream.
 _FONTS_DIR = Path(__file__).resolve().parent / "fonts"
 pdfmetrics.registerFont(TTFont("NotoSans", _FONTS_DIR / "NotoSans-Regular.ttf"))
 pdfmetrics.registerFont(TTFont("NotoSans-Bold", _FONTS_DIR / "NotoSans-Bold.ttf"))
+pdfmetrics.registerFont(TTFont("NotoSansHebrew", _FONTS_DIR / "NotoSansHebrew-Regular.ttf"))
+pdfmetrics.registerFont(TTFont("NotoSansHebrew-Bold", _FONTS_DIR / "NotoSansHebrew-Bold.ttf"))
+
+_HEBREW_RE = re.compile(r"[֐-׿]")
+
+
+def _font_for(text, bold=False):
+    """Picks the Hebrew or Latin Noto Sans variant based on the text's
+    script -- reportlab has no automatic font-fallback across a Paragraph,
+    so mixed-script client-supplied text (a work name, a client name)
+    needs the right single font chosen up front. Reuses the same Hebrew-
+    detection approach as quote_reply.py/email_ai.py elsewhere in this app."""
+    base = "NotoSansHebrew" if _HEBREW_RE.search(text or "") else "NotoSans"
+    return f"{base}-Bold" if bold else base
 
 STUDIO_NAME = "The Print House"
 STUDIO_ADDRESS_LINE = "The Print House LTD, Hazerem 1 St. Tel Aviv, ISRAEL, VAT no. 514717255"
@@ -144,9 +167,10 @@ def build_quote_pdf(quote, output_path=None):
 
         # Footer
         y = 16 * mm
-        canvas.setFont("NotoSans-Bold", 7.5)
         canvas.setFillColor(colors.grey)
+        canvas.setFont("NotoSans-Bold", 7.5)
         canvas.drawString(MARGIN, y, f"Price Quote #{quote_no} — ({date_str})")
+        canvas.setFont(_font_for(client_name, bold=True), 7.5)
         canvas.drawString(MARGIN, y - 3.2 * mm, f"Prepared for {client_name}")
         canvas.setFont("NotoSans", 7.5)
         contact_bits = []
@@ -165,7 +189,7 @@ def build_quote_pdf(quote, output_path=None):
 
     story = []
 
-    client_block = [f"<b>Prepared for {client_name}</b>"]
+    client_block = [f'<font face="{_font_for(client_name, bold=True)}">Prepared for {escape(client_name)}</font>']
     if quote.get("client_phone"):
         client_block.append(f"T {quote['client_phone']}")
     if quote.get("client_email"):
@@ -192,7 +216,7 @@ def build_quote_pdf(quote, output_path=None):
         # quick-quote UI, which never sets this field.
         work_name = (entry.get("description") or "").strip()
         if work_name:
-            desc_lines = [f"<b>{escape(work_name)}</b>"] + desc_lines
+            desc_lines = [f'<font face="{_font_for(work_name, bold=True)}">{escape(work_name)}</font>'] + desc_lines
         desc_html = "<br/>".join(desc_lines) if desc_lines else "—"
         size_str = f"{entry['height_cm']:g} x {entry['width_cm']:g}"
         total = entry["quantity_price"]
