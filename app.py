@@ -42,6 +42,7 @@ import quote_pdf
 import quote_reply
 import quote_store
 import wood_frame_numbering
+import worksheet_ai
 from pricing_engine import JobComponentRequest, PricingCatalog, PricingError, price_job
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -395,12 +396,25 @@ def api_intake_form_pdf():
     )
 
 
+_PHOTO_MEDIA_TYPES = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+    "heic": "image/heic", "heif": "image/heic", "webp": "image/webp",
+}
+
+
 @app.route("/api/worksheet-photos", methods=["GET", "POST"])
 def api_worksheet_photos():
     """POST: save a photo of a filled-in client meeting worksheet (from
-    the mobile "Photograph Worksheet" button). GET: list saved photos,
-    most recent first -- used to confirm a photo actually saved, and for
-    a future session to find the latest one to read back."""
+    the mobile "Photograph Worksheet" button), then immediately read it
+    with Claude vision (worksheet_ai.py) and price every row it could
+    make out. Always returns a review payload -- never auto-saves a real
+    quote, since a misread handwritten number becoming a wrong client
+    price is a real risk, not a theoretical one. The photo itself is
+    saved regardless of whether the analysis step succeeds, so nothing
+    is lost if e.g. the Claude API call fails.
+
+    GET: list saved photos, most recent first.
+    """
     if request.method == "POST":
         photo = request.files.get("photo")
         if not photo or not photo.filename:
@@ -409,8 +423,33 @@ def api_worksheet_photos():
         if ext not in _ALLOWED_PHOTO_EXTENSIONS:
             ext = "jpg"
         filename = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}.{ext}"
-        photo.save(_worksheet_photos_dir / filename)
-        return jsonify({"status": "saved", "filename": filename})
+        photo_bytes = photo.read()
+        (_worksheet_photos_dir / filename).write_bytes(photo_bytes)
+
+        result = {"status": "saved", "filename": filename}
+        try:
+            media_type = _PHOTO_MEDIA_TYPES.get(ext, "image/jpeg")
+            reading = worksheet_ai.extract_worksheet(photo_bytes, media_type)
+            rows = worksheet_ai.map_to_quote_lines(reading.get("items", []), catalog)
+
+            priceable = [r for r in rows if r["parsed_line"]]
+            if priceable:
+                priced = price_parsed_lines([r["parsed_line"] for r in priceable])
+                for row, quote in zip(priceable, priced["quotes"]):
+                    row["priced"] = quote
+                grand_total = priced["grand_total_incl_vat"]
+            else:
+                grand_total = 0
+
+            result["analysis"] = {
+                "client_name": reading.get("client_name"),
+                "date": reading.get("date"),
+                "rows": rows,
+                "grand_total_incl_vat": grand_total,
+            }
+        except Exception as e:
+            result["analysis_error"] = str(e)
+        return jsonify(result)
 
     photos = sorted(
         (p.name for p in _worksheet_photos_dir.iterdir() if p.is_file()),

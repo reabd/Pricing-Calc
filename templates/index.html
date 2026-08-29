@@ -225,6 +225,19 @@
   .success { color: #1a7a41; margin-top: 10px; font-size: 0.9rem; }
   :root[data-theme="dark"] .success { color: #7fe0a3; }
 
+  .worksheet-review-box {
+    margin-top: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--paper);
+  }
+  .worksheet-row { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 0.88rem; }
+  .worksheet-row:last-of-type { border-bottom: none; }
+  .worksheet-row-check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+  .worksheet-row-check input { margin-top: 3px; }
+  .worksheet-row-detail { margin: 4px 0 0 24px; color: var(--ink-muted); font-size: 0.85rem; }
+  .worksheet-row-price { margin: 4px 0 0 24px; font-variant-numeric: tabular-nums; }
+  .worksheet-row-warnings { margin: 6px 0 0 24px; color: var(--danger); font-size: 0.82rem; }
+  .worksheet-row-unpriced { opacity: 0.75; }
+
   .quote-history-row {
     display: flex; align-items: center; gap: 16px; padding: 10px 0;
     border-bottom: 1px solid var(--line); font-size: 0.88rem;
@@ -474,6 +487,7 @@
       <input type="file" id="worksheet-photo-input" accept="image/*" capture="environment" style="display:none;">
     </div>
     <p class="muted" id="worksheet-photo-status" style="display:none;"></p>
+    <div id="worksheet-review" style="display:none;"></div>
 
     <div class="tool-panel active" id="panel-freetext">
       <p class="muted">Free text, Hebrew or English — several products at once, wood species, paint finishes, whatever doesn't fit a quick-quote card. Example: "2 units 50x70 box frame in cherry wood".</p>
@@ -817,21 +831,88 @@ document.getElementById('worksheet-photo-input').addEventListener('change', asyn
   const file = e.target.files[0];
   if (!file) return;
   const statusEl = document.getElementById('worksheet-photo-status');
+  const reviewEl = document.getElementById('worksheet-review');
   statusEl.style.display = 'block';
-  statusEl.innerHTML = '<span class="spinner"></span>Saving photo…';
+  reviewEl.style.display = 'none';
+  reviewEl.innerHTML = '';
+  statusEl.innerHTML = '<span class="spinner"></span>Saving photo and reading it…';
   try {
     const formData = new FormData();
     formData.append('photo', file);
     const res = await fetch(API_BASE + '/api/worksheet-photos', { method: 'POST', body: formData });
     const data = await res.json();
     if (data.error) { statusEl.innerHTML = `<span class="error">${data.error}</span>`; return; }
-    statusEl.innerHTML = `<span class="success">Saved. Send it to Claude in your next session to build the quote.</span>`;
+    if (data.analysis_error) {
+      statusEl.innerHTML = `<span class="success">Photo saved.</span> <span class="error">Couldn't read it automatically: ${escapeHtml(data.analysis_error)}. Build this quote manually instead.</span>`;
+      return;
+    }
+    statusEl.innerHTML = '<span class="success">Photo saved and read.</span> Review below before adding to a quote.';
+    renderWorksheetReview(data.analysis);
   } catch (err) {
     statusEl.innerHTML = `<span class="error">${err}</span>`;
   } finally {
     e.target.value = ''; // allow photographing another one right after
   }
 });
+
+function renderWorksheetReview(analysis) {
+  const reviewEl = document.getElementById('worksheet-review');
+  reviewEl.style.display = 'block';
+
+  const rowsHtml = analysis.rows.map((row, idx) => {
+    const priced = row.priced;
+    const addOnsStr = (row.add_ons || []).join(', ') || '—';
+    const sizeStr = (row.height_cm && row.width_cm) ? `${row.height_cm} × ${row.width_cm} cm` : '—';
+    const warningsHtml = (row.warnings || []).length
+      ? `<div class="worksheet-row-warnings">${row.warnings.map(w => escapeHtml(w)).join('<br>')}</div>` : '';
+    if (priced) {
+      return `
+        <div class="worksheet-row">
+          <label class="worksheet-row-check">
+            <input type="checkbox" class="worksheet-row-include" data-idx="${idx}" checked>
+            <span><strong>#${row.row_number}</strong> ${escapeHtml(row.work_name || '(unnamed)')} — ${sizeStr} — ${escapeHtml(row.frame_type || '')}</span>
+          </label>
+          <div class="worksheet-row-detail">Add-ons: ${escapeHtml(addOnsStr)} ${row.notes ? '· Notes: ' + escapeHtml(row.notes) : ''}</div>
+          <div class="worksheet-row-price">${fmt(priced.quantity_price)} before VAT</div>
+          ${warningsHtml}
+        </div>`;
+    }
+    return `
+      <div class="worksheet-row worksheet-row-unpriced">
+        <span><strong>#${row.row_number}</strong> ${escapeHtml(row.work_name || '(unnamed)')} — couldn't price this row automatically</span>
+        ${warningsHtml}
+      </div>`;
+  }).join('');
+
+  reviewEl.innerHTML = `
+    <div class="worksheet-review-box">
+      <p class="eyebrow">Detected: ${escapeHtml(analysis.client_name || 'no client name')}${analysis.date ? ' · ' + escapeHtml(analysis.date) : ''}</p>
+      ${rowsHtml}
+      <button type="button" class="action" id="worksheet-add-to-cart-btn" style="margin-top:12px;">Add Checked Rows to Quote Cart</button>
+    </div>`;
+
+  document.getElementById('worksheet-add-to-cart-btn').addEventListener('click', () => {
+    const checks = reviewEl.querySelectorAll('.worksheet-row-include:checked');
+    let added = 0;
+    checks.forEach(chk => {
+      const row = analysis.rows[parseInt(chk.dataset.idx, 10)];
+      if (!row.priced) return;
+      quoteCart.push({ label: row.work_name || `Worksheet row ${row.row_number}`, work_item: row.priced });
+      added++;
+    });
+    if (added === 0) return;
+    const clientNameEl = document.getElementById('quote-client-name');
+    if (!clientNameEl.value.trim() && analysis.client_name) {
+      clientNameEl.value = analysis.client_name;
+    }
+    renderQuoteCart();
+    reviewEl.style.display = 'none';
+    reviewEl.innerHTML = '';
+    document.getElementById('worksheet-photo-status').innerHTML =
+      `<span class="success">Added ${added} item(s) to the quote cart below.</span>`;
+    document.getElementById('quote-cart-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
 
 const grid = document.getElementById('preset-grid');
 QUICK_PRESETS.forEach(p => {
